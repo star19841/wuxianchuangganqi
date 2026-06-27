@@ -3134,3 +3134,117 @@ body.has-model-chat-open {
         min-height: 240px;
     }
 }
+
+.report-chart-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+.report-layout-grid {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    align-items: start;
+}
+
+.report-chart-panel {
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 251, 0.92));
+    padding: 14px;
+}
+
+.report-chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 10px;
+}
+
+.report-chart-canvas {
+    width: 100%;
+    min-height: 260px;
+}
+
+.report-charts-card .ops-toolbar .admin-toolbar {
+    padding: 8px 10px;
+    font-size: 12px;
+}
+
+.report-charts-card .layui-card-body {
+    padding-bottom: 14px;
+}
+
+.report-history-card .layui-card-body {
+    padding-top: 12px;
+}
+
+.report-history-wrap {
+    min-height: 420px;
+}
+
+#report-history-table {
+    table-layout: fixed;
+}
+
+#report-history-table thead th {
+    padding: 14px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #28435f;
+    white-space: nowrap;
+}
+
+#report-history-table tbody td {
+    padding: 15px 14px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #223449;
+    vertical-align: top;
+    word-break: break-word;
+}
+
+#report-history-table tbody tr:nth-child(2n) {
+    background: rgba(244, 249, 255, 0.72);
+}
+
+#report-history-table tbody td:last-child {
+    color: #102b46;
+    font-weight: 600;
+}
+
+.report-col-time {
+    width: 18%;
+}
+
+.report-col-source {
+    width: 14%;
+}
+
+.report-col-device {
+    width: 20%;
+}
+
+.report-col-action {
+    width: 12%;
+}
+
+.report-col-detail {
+    width: 36%;
+}
+
+@media (max-width: 980px) {
+    .report-layout-grid,
+    .report-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .report-history-wrap {
+        min-height: 0;
+    }
+
+    #report-history-table thead th,
+    #report-history-table tbody td {
+        padding: 12px 10px;
+        font-size: 13px;
+    }
+}

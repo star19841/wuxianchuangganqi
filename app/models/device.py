@@ -2,6 +2,7 @@
 
 import sqlite3
 
+from app.models.data_report import DataReportRepository
 from app.models.db import get_connection
 
 
@@ -153,6 +154,67 @@ class DeviceRepository:
             return True
         except sqlite3.IntegrityError:
             return False
+
+    @staticmethod
+    def sync_device_runtime_data(box_id, runtime_data):
+        normalized_box_id = (box_id or "").strip()
+        payload = dict(runtime_data or {})
+        if not normalized_box_id:
+            return False
+
+        updates = []
+        values = []
+        for column in ("esp32_ip", "manage_url", "device_name", "category"):
+            value = payload.get(column)
+            if isinstance(value, str) and value.strip():
+                updates.append(f"{column} = ?")
+                values.append(value.strip())
+
+        if not updates:
+            return False
+
+        values.append(normalized_box_id)
+        with get_connection() as conn:
+            existing = conn.execute(
+                """
+                SELECT id, device_name, esp32_ip, manage_url, category
+                FROM devices
+                WHERE box_id = ?
+                """,
+                (normalized_box_id,),
+            ).fetchone()
+            if not existing:
+                return False
+            conn.execute(
+                f"""
+                UPDATE devices
+                SET {", ".join(updates)}
+                WHERE box_id = ?
+                """,
+                values,
+            )
+            refreshed = conn.execute(
+                """
+                SELECT id, device_name, esp32_ip, manage_url, category
+                FROM devices
+                WHERE box_id = ?
+                """,
+                (normalized_box_id,),
+            ).fetchone()
+
+        changed_fields = []
+        for column in ("device_name", "esp32_ip", "manage_url", "category"):
+            if refreshed[column] != existing[column]:
+                changed_fields.append(f"{column}={refreshed[column]}")
+        if changed_fields:
+            DataReportRepository.record_event(
+                "system_sync",
+                "runtime_sync",
+                ", ".join(changed_fields),
+                box_id=normalized_box_id,
+                device_name=refreshed["device_name"],
+            )
+        return True
 
     @staticmethod
     def set_device_connection_status(box_id, is_online, server_id=None):

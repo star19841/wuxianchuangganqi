@@ -1,4 +1,4 @@
-"""设备管理控制器。"""
+"""Device management handlers."""
 
 import math
 from urllib.parse import quote
@@ -6,6 +6,7 @@ from urllib.parse import quote
 import tornado.web
 
 from app.controllers.base import BaseHandler
+from app.models.data_report import DataReportRepository
 from app.models.device import DeviceRepository
 
 
@@ -93,6 +94,14 @@ class DeviceSaveHandler(BaseHandler):
             if not updated:
                 self.redirect(f"/devices?edit_id={device_id}&error={quote('设备唯一编码已存在')}")
                 return
+            DataReportRepository.record_event(
+                "user_action",
+                "update_device",
+                f"updated device {form_data['box_id']}",
+                actor_name=self.current_user,
+                box_id=form_data["box_id"],
+                device_name=form_data["device_name"],
+            )
             self.redirect(f"/devices?success={quote('设备更新成功')}")
             return
 
@@ -107,6 +116,14 @@ class DeviceSaveHandler(BaseHandler):
         if not created:
             self.redirect(f"/devices?error={quote('设备唯一编码已存在')}")
             return
+        DataReportRepository.record_event(
+            "user_action",
+            "create_device",
+            f"created device {form_data['box_id']}",
+            actor_name=self.current_user,
+            box_id=form_data["box_id"],
+            device_name=form_data["device_name"],
+        )
         self.redirect(f"/devices?success={quote('设备创建成功')}")
 
 
@@ -114,5 +131,15 @@ class DeviceDeleteHandler(BaseHandler):
     @tornado.web.authenticated
     def post(self):
         device_id = int(self.get_body_argument("device_id"))
+        detail = DeviceRepository.get_device_detail(device_id)
         DeviceRepository.delete_device(device_id)
+        if detail:
+            DataReportRepository.record_event(
+                "user_action",
+                "delete_device",
+                f"deleted device {detail['device']['box_id']}",
+                actor_name=self.current_user,
+                box_id=detail["device"]["box_id"],
+                device_name=detail["device"]["device_name"],
+            )
         self.redirect(f"/devices?success={quote('设备删除成功')}")

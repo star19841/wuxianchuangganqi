@@ -93,6 +93,21 @@ def init_db():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS device_event_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                actor_name TEXT NOT NULL DEFAULT '',
+                box_id TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                action_name TEXT NOT NULL DEFAULT '',
+                detail_text TEXT NOT NULL DEFAULT '',
+                server_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS device_sensors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 device_id INTEGER NOT NULL,

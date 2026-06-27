@@ -8,6 +8,7 @@ import tornado.web
 
 from app.controllers.base import BaseHandler
 from app.models.aiot_server import AiotServerRepository
+from app.models.data_report import DataReportRepository
 from app.services.aiot_server_manager import AiotServerManager
 
 
@@ -123,7 +124,7 @@ class AiotServerListHandler(BaseHandler):
 
         self.render(
             "aiot_servers.html",
-            title="AIOT服务器管理",
+            title="AIOT服务管理",
             username=self.current_user,
             servers=decorated_rows,
             command_devices=_build_command_devices(decorated_rows),
@@ -291,4 +292,12 @@ class AiotServerSendCommandHandler(BaseHandler):
             self.redirect(f"/aiot-servers?error={quote(f'命令发送失败：{exc}')}")
             return
 
+        DataReportRepository.record_event(
+            "user_action",
+            "send_command",
+            command_text,
+            actor_name=self.current_user,
+            box_id=box_id,
+            server_id=server_id,
+        )
         self.redirect(f"/aiot-servers?success={quote(f'命令已发送到 {box_id}')}")

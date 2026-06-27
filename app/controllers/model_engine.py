@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
@@ -14,6 +15,8 @@ from app.services.aiot_server_manager import AiotServerManager
 
 
 MODEL_PAGE_SIZE = 6
+MODEL_REQUEST_TIMEOUT = 8
+MODEL_CHAT_TIMEOUT = 90
 
 
 def _build_model_payload(handler):
@@ -28,14 +31,14 @@ def _build_model_payload(handler):
     }
 
 
-def _request_json(url, payload, headers):
+def _request_json(url, payload, headers, timeout=MODEL_REQUEST_TIMEOUT):
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
         headers=headers,
         method="POST",
     )
-    with urlopen(request, timeout=8) as response:
+    with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -88,7 +91,7 @@ def _build_aiot_chat_system_prompt(online_devices):
         "- command_text: 当需要控制设备时，填写要直接发给开发板的原始命令；否则返回空字符串。\n"
         "- 如果用户是在查询状态、解释信息、或当前没有合适在线设备，就不要发命令。\n"
         "- 如果用户要求控制 LED/屏幕/传感器，请优先从在线设备及其传感器中选择最匹配的一项。\n"
-        "- 命令格式统一尽量使用 sensor <sensor_name> <pin_code> <action>，比如 sensor LED GPIO15 on。\n"
+        "- 当用户是开灯时，command_text 返回 on；关灯时返回 off；查看状态时返回 status。\n"
         "- reply 要自然简洁，若将发送命令，要明确告诉用户你准备控制哪个设备。\n"
         "当前在线设备如下：\n"
         f"{device_text}"
@@ -99,10 +102,23 @@ def _parse_aiot_chat_response(content):
     text = (content or "").strip()
     if not text:
         return {"reply": "模型未返回内容。", "target_box_id": "", "command_text": ""}
+    json_candidates = []
+    fenced_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    if fenced_match:
+        json_candidates.append(fenced_match.group(1))
+    json_candidates.extend(re.findall(r"\{.*?\}", text, flags=re.DOTALL))
     try:
         payload = json.loads(text)
     except json.JSONDecodeError:
-        return {"reply": text, "target_box_id": "", "command_text": ""}
+        payload = None
+        for candidate in json_candidates:
+            try:
+                payload = json.loads(candidate)
+                break
+            except json.JSONDecodeError:
+                continue
+        if payload is None:
+            return {"reply": text, "target_box_id": "", "command_text": ""}
     return {
         "reply": (payload.get("reply") or "").strip() or text,
         "target_box_id": (payload.get("target_box_id") or "").strip(),
@@ -229,6 +245,7 @@ class ModelEngineTestHandler(BaseHandler):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {model['api_key']}",
                 },
+                timeout=MODEL_CHAT_TIMEOUT,
             )
             message = response.get("choices", [{}])[0].get("message", {}).get("content", "")
             flash = message[:60] or "模型连通成功"
@@ -269,6 +286,7 @@ class ModelEngineChatHandler(BaseHandler):
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {model['api_key']}",
                 },
+                timeout=MODEL_CHAT_TIMEOUT,
             )
             content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
             parsed = _parse_aiot_chat_response(content)

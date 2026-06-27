@@ -16,6 +16,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const modelChatDeviceSummary = document.querySelector("[data-model-chat-device-summary]");
   const runtimeUrl = flashState?.dataset.aiotRuntimeUrl?.trim();
   const onlineControlDevicesScript = document.querySelector("[data-online-control-devices]");
+  const reportRuntimeUrl = flashState?.dataset.reportRuntimeUrl?.trim();
+  const reportTrendChartElement = document.querySelector("[data-report-trend-chart]");
+  const reportSourceChartElement = document.querySelector("[data-report-source-chart]");
+  const reportHistoryBody = document.querySelector("[data-report-history-body]");
 
   let latestOnlineDevices = [];
   let modelChatState = {
@@ -89,6 +93,31 @@ document.addEventListener("DOMContentLoaded", () => {
           </article>
         `,
       )
+      .join("");
+
+  const renderReportHistoryRows = (events) =>
+    events
+      .map((event) => {
+        const sourceLabel =
+          event.event_type === "device_report"
+            ? "设备"
+            : event.event_type === "user_action"
+              ? "人工"
+              : "同步";
+        const source = event.actor_name ? `${sourceLabel} / ${event.actor_name}` : sourceLabel;
+        const deviceLabel = event.box_id
+          ? `${event.box_id}${event.device_name ? ` / ${event.device_name}` : ""}`
+          : "-";
+        return `
+          <tr>
+            <td>${escapeHtml(event.created_at || "")}</td>
+            <td>${escapeHtml(source)}</td>
+            <td>${escapeHtml(deviceLabel)}</td>
+            <td>${escapeHtml(event.action_name || "")}</td>
+            <td>${escapeHtml(event.detail_text || "-")}</td>
+          </tr>
+        `;
+      })
       .join("");
 
   const renderModelChatBubble = ({ role, text, meta = "" }) => `
@@ -414,6 +443,93 @@ document.addEventListener("DOMContentLoaded", () => {
     window.setInterval(poll, seconds * 1000);
   };
 
+  const startReportPolling = () => {
+    if (!reportRuntimeUrl || !reportHistoryBody || !window.fetch) {
+      return;
+    }
+    const trendChart =
+      reportTrendChartElement && window.echarts ? window.echarts.init(reportTrendChartElement) : null;
+    const sourceChart =
+      reportSourceChartElement && window.echarts ? window.echarts.init(reportSourceChartElement) : null;
+    const seconds = Number.parseInt(flashState?.dataset.reportRefreshSeconds || "0", 10);
+    if (seconds <= 0) {
+      return;
+    }
+
+    const renderSummary = (summary) => {
+      Object.entries(summary || {}).forEach(([key, value]) => {
+        const target = document.querySelector(`[data-report-summary-item="${key}"] strong`);
+        if (target) {
+          target.textContent = `${value ?? 0}`;
+        }
+      });
+    };
+
+    const renderCharts = (dailyTrend, sourceBreakdown) => {
+      if (trendChart) {
+        trendChart.setOption({
+          tooltip: { trigger: "axis" },
+          legend: { data: ["设备上报", "人工操作"] },
+          xAxis: { type: "category", data: (dailyTrend || []).map((item) => item.day_label) },
+          yAxis: { type: "value" },
+          series: [
+            {
+              name: "设备上报",
+              type: "line",
+              smooth: true,
+              data: (dailyTrend || []).map((item) => item.device_report_count),
+            },
+            {
+              name: "人工操作",
+              type: "bar",
+              data: (dailyTrend || []).map((item) => item.user_action_count),
+            },
+          ],
+        });
+      }
+      if (sourceChart) {
+        sourceChart.setOption({
+          tooltip: { trigger: "item" },
+          series: [
+            {
+              type: "pie",
+              radius: ["42%", "72%"],
+              data: (sourceBreakdown || []).map((item) => ({
+                name: item.event_type,
+                value: item.total,
+              })),
+            },
+          ],
+        });
+      }
+    };
+
+    const poll = async () => {
+      try {
+        const response = await window.fetch(reportRuntimeUrl, {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+        if (!response.ok) {
+          return;
+        }
+        const payload = await response.json();
+        renderSummary(payload.summary || {});
+        reportHistoryBody.innerHTML = renderReportHistoryRows(payload.recent_events || []);
+        renderCharts(payload.daily_trend || [], payload.source_breakdown || []);
+      } catch (_error) {
+        // Keep report polling silent for dashboard continuity.
+      }
+    };
+
+    poll();
+    window.setInterval(poll, seconds * 1000);
+    window.addEventListener("resize", () => {
+      trendChart?.resize();
+      sourceChart?.resize();
+    });
+  };
+
   if (passwordToggle && passwordInput) {
     passwordToggle.addEventListener("click", () => {
       passwordInput.type = passwordInput.type === "password" ? "text" : "password";
@@ -525,6 +641,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   scrollMessageStreamsToBottom();
   startAiotRuntimePolling();
+  startReportPolling();
 
   if (sensorList && addSensorButton) {
     const createSensorRow = () => {

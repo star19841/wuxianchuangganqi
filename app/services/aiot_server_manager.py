@@ -6,6 +6,7 @@ import threading
 import time
 
 from app.models.aiot_server import AiotServerRepository
+from app.models.data_report import DataReportRepository
 from app.models.device import DeviceRepository
 
 
@@ -44,8 +45,35 @@ def _extract_box_id(message):
     return None
 
 
+def _extract_runtime_device_payload(message):
+    text = (message or "").strip()
+    if not (text.startswith("{") and text.endswith("}")):
+        return {}
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+
+    normalized = {}
+    field_aliases = {
+        "esp32_ip": ("esp32_ip", "ip", "device_ip"),
+        "manage_url": ("manage_url", "url"),
+        "device_name": ("device_name", "name"),
+        "category": ("category", "device_type"),
+    }
+    for target, aliases in field_aliases.items():
+        for key in aliases:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                normalized[target] = value.strip()
+                break
+    return normalized
+
+
 class ManagedAiotTcpServer:
-    IDLE_OFFLINE_SECONDS = 3
+    IDLE_OFFLINE_SECONDS = 360
 
     def __init__(self, server_row):
         self.server_id = server_row["id"]
@@ -163,14 +191,26 @@ class ManagedAiotTcpServer:
                     if not message:
                         continue
                     box_id = _extract_box_id(message)
+                    runtime_payload = _extract_runtime_device_payload(message)
                     if box_id:
                         current_box_id = box_id
                         self.bind_device_connection(current_box_id, conn)
+                        if runtime_payload:
+                            DeviceRepository.sync_device_runtime_data(box_id, runtime_payload)
                     AiotServerRepository.append_server_message(
                         server_id=self.server_id,
                         box_id=box_id or current_box_id,
                         message_text=message,
                     )
+                    if current_box_id:
+                        DataReportRepository.record_event(
+                            "device_report",
+                            "runtime_message",
+                            message,
+                            box_id=current_box_id,
+                            device_name=(runtime_payload.get("device_name") or ""),
+                            server_id=self.server_id,
+                        )
                     if box_id:
                         DeviceRepository.set_device_connection_status(
                             box_id=box_id,

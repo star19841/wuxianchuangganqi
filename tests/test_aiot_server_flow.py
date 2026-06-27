@@ -175,6 +175,7 @@ class AiotServerFlowTestCase(AsyncHTTPTestCase):
         self.assertIn("data-online-device-select", html)
         self.assertIn("data-sensor-select", html)
         self.assertIn("data-command-input", html)
+        self.assertIn("例如 on", html)
 
     def test_send_command_accepts_boxid_alias_field(self):
         class FakeManager:

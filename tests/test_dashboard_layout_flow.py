@@ -63,7 +63,7 @@ class DashboardLayoutFlowTestCase(AsyncHTTPTestCase):
         cookies = self._login_cookies()
         cookie_header = {"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())}
 
-        for path in ["/", "/devices", "/model-engines", "/api-services", "/aiot-servers"]:
+        for path in ["/", "/devices", "/model-engines", "/api-services", "/aiot-servers", "/data-reports"]:
             response = self.fetch(path, headers=cookie_header)
             html = response.body.decode("utf-8")
             self.assertEqual(response.code, 200, path)

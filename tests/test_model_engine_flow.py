@@ -132,7 +132,7 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
                             {
                                 "reply": "已为您打开客厅开发板 LED。",
                                 "target_box_id": "BOX-AI-01",
-                                "command_text": "sensor LED GPIO15 on",
+                                "command_text": "on",
                             },
                             ensure_ascii=False,
                         )
@@ -169,8 +169,109 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(payload["reply"], "已为您打开客厅开发板 LED。")
         self.assertTrue(payload["command_sent"])
-        self.assertEqual(payload["command_text"], "sensor LED GPIO15 on")
-        self.assertEqual(fake_manager.calls, [(server_id, "BOX-AI-01", "sensor LED GPIO15 on")])
+        self.assertEqual(payload["command_text"], "on")
+        self.assertEqual(fake_manager.calls, [(server_id, "BOX-AI-01", "on")])
+
+    def test_parse_aiot_chat_response_extracts_json_from_markdown_block(self):
+        from app.controllers.model_engine import _parse_aiot_chat_response
+
+        content = """根据您的描述，下面是结果：
+
+```json
+{"reply":"已为您关闭灯光","target_box_id":"12345","command_text":"off"}
+```
+"""
+
+        payload = _parse_aiot_chat_response(content)
+
+        self.assertEqual(payload["reply"], "已为您关闭灯光")
+        self.assertEqual(payload["target_box_id"], "12345")
+        self.assertEqual(payload["command_text"], "off")
+
+    def test_aiot_chat_system_prompt_uses_simple_light_commands(self):
+        from app.controllers.model_engine import _build_aiot_chat_system_prompt
+
+        prompt = _build_aiot_chat_system_prompt(
+            [
+                {
+                    "server_id": 4,
+                    "server_name": "AIOT Service",
+                    "box_id": "12345",
+                    "device_name": "ESP32开发板",
+                    "category": "AIOT",
+                    "sensors": [{"sensor_name": "LED", "pin_code": "GPIO15", "pin_remark": "status"}],
+                }
+            ]
+        )
+
+        self.assertIn("on", prompt)
+        self.assertIn("off", prompt)
+        self.assertIn("status", prompt)
+        self.assertNotIn("sensor LED GPIO15 on", prompt)
+
+    def test_model_chat_endpoint_uses_extended_timeout(self):
+        from app.models.model_engine import ModelEngineRepository
+
+        model_created = ModelEngineRepository.create_model(
+            name="Timeout Probe",
+            api_key="test-key",
+            api_url="https://example.test/api/v1",
+            model_name="qwen-test",
+            temperature=0.7,
+            max_tokens=1024,
+            is_default=True,
+        )
+        self.assertTrue(model_created)
+        model = ModelEngineRepository.get_default_model()
+
+        cookies = self._login_cookies()
+        xsrf_value = cookies["_xsrf"]
+        cookie_header = "; ".join(f"{key}={value}" for key, value in cookies.items())
+        body = urllib.parse.urlencode(
+            {
+                "_xsrf": xsrf_value,
+                "model_id": str(model["id"]),
+                "message": "你好",
+            }
+        )
+
+        captured = {}
+
+        def fake_request_json(url, payload, headers, timeout=8):
+            captured["url"] = url
+            captured["timeout"] = timeout
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "reply": "你好",
+                                    "target_box_id": "",
+                                    "command_text": "",
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    }
+                ]
+            }
+
+        with mock.patch("app.controllers.model_engine._request_json", side_effect=fake_request_json):
+            response = self.fetch(
+                "/model-engines/chat",
+                method="POST",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Cookie": cookie_header,
+                    "Accept": "application/json",
+                },
+                body=body,
+            )
+
+        self.assertEqual(response.code, 200)
+        self.assertEqual(captured["url"], "https://example.test/api/v1/chat/completions")
+        self.assertEqual(captured["timeout"], 90)
 
 
 if __name__ == "__main__":
