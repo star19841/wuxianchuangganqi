@@ -65,7 +65,7 @@ class AiotServerFlowTestCase(AsyncHTTPTestCase):
         from app.models.aiot_server import AiotServerRepository
 
         server_id = AiotServerRepository.create_server(
-            server_name="AIOT 消息服务",
+            server_name="AIOT Message Service",
             listen_ip="0.0.0.0",
             listen_port=8888,
             is_enabled=True,
@@ -79,8 +79,8 @@ class AiotServerFlowTestCase(AsyncHTTPTestCase):
         )
         html = response.body.decode("utf-8")
         self.assertEqual(response.code, 200)
-        self.assertIn("AIOT 服务器管理", html)
-        self.assertIn("AIOT 消息服务", html)
+        self.assertIn("AIOT", html)
+        self.assertIn("AIOT Message Service", html)
         self.assertIn("status=ready", html)
         self.assertIn("BOX-HTTP-01", html)
         self.assertIn("aiot-form-intro", html)
@@ -129,6 +129,131 @@ class AiotServerFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(matched["online_devices"][0]["box_id"], "BOX-RUNTIME-01")
         self.assertEqual(matched["online_devices"][0]["sensors"][0]["sensor_name"], "Screen")
 
+    def test_aiot_runtime_endpoint_returns_recent_events_and_recent_devices(self):
+        from app.models.aiot_server import AiotServerRepository
+
+        server_id = AiotServerRepository.create_server(
+            server_name="AIOT Event Service",
+            listen_ip="0.0.0.0",
+            listen_port=8892,
+            is_enabled=True,
+        )
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-HISTORY-01",
+            event_type="device_offline",
+            event_summary="device disconnected",
+            raw_payload="socket closed",
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/aiot-servers/runtime?page=1&keyword=",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+
+        payload = json.loads(response.body.decode("utf-8"))
+        matched = next(item for item in payload["servers"] if item["id"] == server_id)
+
+        self.assertEqual(matched["recent_events"][0]["event_type"], "device_offline")
+        self.assertEqual(matched["recent_reported_devices"][0]["box_id"], "BOX-HISTORY-01")
+        self.assertEqual(matched["recent_reported_devices"][0]["last_event_type"], "device_offline")
+
+    def test_aiot_runtime_summary_shows_disconnect_hint_when_latest_event_is_offline(self):
+        from app.models.aiot_server import AiotServerRepository
+
+        server_id = AiotServerRepository.create_server(
+            server_name="AIOT Offline Summary Service",
+            listen_ip="0.0.0.0",
+            listen_port=8897,
+            is_enabled=True,
+        )
+        AiotServerRepository.set_running(server_id, True)
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-OFFLINE-01",
+            event_type="device_offline",
+            event_summary="tcp=offline",
+            raw_payload="",
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/aiot-servers/runtime?page=1&keyword=",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+
+        payload = json.loads(response.body.decode("utf-8"))
+        matched = next(item for item in payload["servers"] if item["id"] == server_id)
+
+        self.assertIn("BOX-OFFLINE-01", matched["runtime_summary"])
+        self.assertIn("离线", matched["runtime_summary"])
+
+    def test_aiot_runtime_endpoint_keeps_latest_event_at_bottom(self):
+        from app.models.aiot_server import AiotServerRepository
+
+        server_id = AiotServerRepository.create_server(
+            server_name="AIOT Event Order Service",
+            listen_ip="0.0.0.0",
+            listen_port=8896,
+            is_enabled=True,
+        )
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-ORDER-01",
+            event_type="device_online",
+            event_summary="tcp=online",
+            raw_payload="first",
+        )
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-ORDER-01",
+            event_type="status_report",
+            event_summary="LED=On",
+            raw_payload="second",
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/aiot-servers/runtime?page=1&keyword=",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+
+        payload = json.loads(response.body.decode("utf-8"))
+        matched = next(item for item in payload["servers"] if item["id"] == server_id)
+
+        self.assertEqual(matched["recent_events"][0]["event_type"], "device_online")
+        self.assertEqual(matched["recent_events"][1]["event_type"], "status_report")
+
+    def test_sendable_devices_remain_separate_from_recent_reported_devices(self):
+        from app.models.aiot_server import AiotServerRepository
+
+        server_id = AiotServerRepository.create_server(
+            server_name="AIOT Separation Service",
+            listen_ip="0.0.0.0",
+            listen_port=8893,
+            is_enabled=True,
+        )
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-RECENT-ONLY",
+            event_type="device_offline",
+            event_summary="offline",
+            raw_payload="",
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/aiot-servers/runtime?page=1&keyword=",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+
+        payload = json.loads(response.body.decode("utf-8"))
+        matched = next(item for item in payload["servers"] if item["id"] == server_id)
+
+        self.assertEqual(matched["online_devices"], [])
+        self.assertEqual(matched["recent_reported_devices"][0]["box_id"], "BOX-RECENT-ONLY")
+
     def test_aiot_message_timestamps_render_in_china_timezone(self):
         from app.models.aiot_server import AiotServerRepository
 
@@ -173,9 +298,40 @@ class AiotServerFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertIn("data-command-form", html)
         self.assertIn("data-online-device-select", html)
-        self.assertIn("data-sensor-select", html)
-        self.assertIn("data-command-input", html)
-        self.assertIn("例如 on", html)
+        self.assertNotIn("data-sensor-select", html)
+        self.assertIn("data-command-picker-open", html)
+        self.assertIn("data-command-picker-modal", html)
+        self.assertIn("led_on", html)
+        self.assertIn("get_status", html)
+
+    def test_aiot_servers_page_renders_recent_event_and_recent_device_sections(self):
+        from app.models.aiot_server import AiotServerRepository
+
+        server_id = AiotServerRepository.create_server(
+            server_name="AIOT UI Service",
+            listen_ip="0.0.0.0",
+            listen_port=8894,
+            is_enabled=True,
+        )
+        AiotServerRepository.append_server_event(
+            server_id=server_id,
+            box_id="BOX-UI-01",
+            event_type="status_report",
+            event_summary="wifi=ok",
+            raw_payload='{"wifi":"ok"}',
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/aiot-servers",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+
+        html = response.body.decode("utf-8")
+        self.assertIn("data-recent-events", html)
+        self.assertIn("data-recent-reported-devices", html)
+        self.assertIn("BOX-UI-01", html)
+        self.assertIn("wifi=ok", html)
 
     def test_send_command_accepts_boxid_alias_field(self):
         class FakeManager:

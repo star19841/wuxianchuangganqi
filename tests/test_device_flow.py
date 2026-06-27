@@ -81,14 +81,15 @@ class DeviceFlowTestCase(AsyncHTTPTestCase):
                 ("box_id", "HTTP-BOX-01"),
                 ("esp32_ip", "192.168.1.66"),
                 ("manage_url", "http://192.168.1.66:80"),
-                ("device_name", "HTTP创建设备"),
-                ("category", "照明"),
+                ("device_name", "HTTP Device"),
+                ("category", "Lighting"),
+                ("remark", "table lamp"),
                 ("sensor_name", "DHT22"),
                 ("pin_code", "GPIO4"),
-                ("pin_remark", "温湿度"),
+                ("pin_remark", "temperature"),
                 ("sensor_name", "OLED"),
                 ("pin_code", "GPIO21"),
-                ("pin_remark", "显示屏"),
+                ("pin_remark", "display"),
                 ("_xsrf", xsrf_value),
             ]
         )
@@ -111,6 +112,7 @@ class DeviceFlowTestCase(AsyncHTTPTestCase):
         detail = DeviceRepository.get_device_detail_by_box_id("HTTP-BOX-01")
         self.assertIsNotNone(detail)
         self.assertEqual(len(detail["sensors"]), 2)
+        self.assertEqual(detail["device"]["remark"], "table lamp")
 
         list_response = self.fetch(
             "/devices",
@@ -120,6 +122,75 @@ class DeviceFlowTestCase(AsyncHTTPTestCase):
         self.assertIn("DHT22", list_html)
         self.assertIn("OLED", list_html)
         self.assertIn("data-sensor-chip", list_html)
+        self.assertIn("table lamp", list_html)
+
+    def test_devices_page_renders_last_seen_at_in_china_timezone(self):
+        from app.models.device import DeviceRepository
+
+        DeviceRepository.create_device(
+            box_id="TZ-BOX-01",
+            esp32_ip="192.168.1.77",
+            manage_url="http://192.168.1.77:80",
+            device_name="Timezone Device",
+            category="Test",
+            sensors=[],
+        )
+        DeviceRepository.set_device_connection_status(
+            box_id="TZ-BOX-01",
+            is_online=True,
+            server_id=None,
+        )
+        with db.get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE devices
+                SET last_seen_at = ?
+                WHERE box_id = ?
+                """,
+                ("2026-06-27 00:40:19", "TZ-BOX-01"),
+            )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/devices",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+        html = response.body.decode("utf-8")
+
+        self.assertEqual(response.code, 200)
+        self.assertIn("2026-06-27 08:40:19", html)
+
+    def test_devices_page_renders_runtime_status_summary_and_raw_status(self):
+        from app.models.device import DeviceRepository
+
+        DeviceRepository.create_device(
+            box_id="STATUS-BOX-01",
+            esp32_ip="192.168.1.81",
+            manage_url="http://192.168.1.81:80",
+            device_name="Status Device",
+            category="Display",
+            sensors=[],
+            remark="lab shelf",
+        )
+        DeviceRepository.sync_device_runtime_data(
+            "STATUS-BOX-01",
+            {
+                "status_summary": "LED=On | wifi=connected",
+                "raw_status_text": '{"LED":"On","wifi":"connected"}',
+            },
+        )
+
+        cookies = self._login_cookies()
+        response = self.fetch(
+            "/devices",
+            headers={"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())},
+        )
+        html = response.body.decode("utf-8")
+
+        self.assertEqual(response.code, 200)
+        self.assertIn("LED=On | wifi=connected", html)
+        self.assertIn("{&quot;LED&quot;:&quot;On&quot;,&quot;wifi&quot;:&quot;connected&quot;}", html)
+        self.assertIn("lab shelf", html)
 
 
 if __name__ == "__main__":

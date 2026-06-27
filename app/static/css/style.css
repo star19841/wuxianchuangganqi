@@ -2823,7 +2823,7 @@ body {
 
 [data-command-panel] .command-panel-row {
     display: grid;
-    grid-template-columns: minmax(200px, 1fr) minmax(200px, 1fr) minmax(280px, 1.35fr);
+    grid-template-columns: minmax(200px, 1fr) minmax(180px, 0.92fr) minmax(280px, 1.35fr);
     align-items: center;
     gap: 6px;
 }
@@ -2836,6 +2836,27 @@ body {
 [data-command-panel] .layui-form-select,
 [data-command-panel] .layui-input {
     width: 100%;
+}
+
+[data-command-panel] .command-picker-trigger {
+    width: 100%;
+    height: 40px;
+    padding: 0 14px;
+    border: 1px solid #dbe5ef;
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ops-text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+}
+
+[data-command-panel] .command-picker-trigger-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 [data-command-panel] .layui-form-select .layui-input,
@@ -2858,6 +2879,109 @@ body {
 [data-command-panel] .layui-btn {
     min-width: 76px;
     height: 40px;
+}
+
+.command-picker-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1250;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.command-picker-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(10, 20, 38, 0.42);
+    backdrop-filter: blur(3px);
+}
+
+.command-picker-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(760px, 100%);
+    max-height: min(560px, calc(100vh - 40px));
+    overflow: hidden;
+    border-radius: 18px;
+    background: #f8fbff;
+    border: 1px solid #d9e6f2;
+    box-shadow: 0 18px 48px rgba(21, 42, 74, 0.22);
+}
+
+.command-picker-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid #e3edf7;
+}
+
+.command-picker-header strong {
+    display: block;
+    color: var(--ops-text);
+    font-size: 18px;
+}
+
+.command-picker-header span {
+    display: block;
+    margin-top: 6px;
+    color: var(--ops-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.command-picker-close {
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 999px;
+    background: #e8f1fb;
+    color: #39557b;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.command-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    max-height: 360px;
+    padding: 18px 20px 20px;
+    overflow: auto;
+}
+
+.command-preset-card {
+    min-height: 92px;
+    padding: 16px 14px;
+    border: 1px solid #d7e4f1;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f2f8ff 100%);
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.command-preset-card:hover {
+    transform: translateY(-2px);
+    border-color: #88b9ea;
+    box-shadow: 0 10px 24px rgba(65, 127, 190, 0.16);
+}
+
+.command-preset-card strong {
+    display: block;
+    color: #183252;
+    font-size: 18px;
+}
+
+.command-preset-card span {
+    display: block;
+    margin-top: 8px;
+    color: var(--ops-muted);
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 .device-sensor-summary,

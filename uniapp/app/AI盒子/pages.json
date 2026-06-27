@@ -1,0 +1,18 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "AI盒子",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "AI盒子",
+    "navigationBarBackgroundColor": "#F4EFE6",
+    "backgroundColor": "#F4EFE6"
+  },
+  "uniIdRouter": {}
+}

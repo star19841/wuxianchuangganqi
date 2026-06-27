@@ -3,3 +3,6 @@ __pycache__/
 *.py[cod]
 database/*.db
 .pytest_cache/
+docs/superpowers/
+uniapp/HBuilderX/
+uniapp/app/*/unpackage/

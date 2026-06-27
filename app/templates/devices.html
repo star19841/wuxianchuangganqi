@@ -13,7 +13,7 @@
                     <div class="ops-page-copy">
                         <span class="section-kicker">AIOT 设备</span>
                         <h1>设备管理</h1>
-                        <p>按任务二维护 box_id、ESP32 IP、管理地址、设备类别和传感器脚位配置。</p>
+                        <p>按任务二维护 box_id、ESP32 IP、管理地址、设备类别、备注与运行状态。</p>
                     </div>
                     <div class="dashboard-summary ops-summary">
                         <div class="summary-box">
@@ -48,7 +48,7 @@
                                         <form class="layui-form dashboard-search" method="get" action="/devices">
                                             <div class="layui-row layui-col-space12">
                                                 <div class="layui-col-md8">
-                                                    <input class="layui-input" name="keyword" value="{{ keyword }}" placeholder="按设备编码、名称、类别、IP 搜索">
+                                                    <input class="layui-input" name="keyword" value="{{ keyword }}" placeholder="按设备编码、名称、类别、IP、备注或管理地址搜索">
                                                 </div>
                                                 <div class="layui-col-md4">
                                                     <div class="dashboard-search-actions">
@@ -85,8 +85,24 @@
                                             <div><dt>管理地址</dt><dd>{{ row["manage_url"] }}</dd></div>
                                             <div><dt>接入服务</dt><dd>{% if row["connected_server_name"] %}{{ row["connected_server_name"] }}{% else %}未接入{% end %}</dd></div>
                                             <div><dt>最近在线变更</dt><dd>{% if row["last_seen_at"] %}{{ row["last_seen_at"] }}{% else %}暂无{% end %}</dd></div>
+                                            <div><dt>备注</dt><dd>{% if row["remark"] %}{{ row["remark"] }}{% else %}暂无{% end %}</dd></div>
                                             <div><dt>创建时间</dt><dd>{{ row["created_at"] }}</dd></div>
                                         </dl>
+                                        <div class="device-sensor-panel device-sensor-panel-inline">
+                                            <div class="device-sensor-header">
+                                                <strong>运行状态</strong>
+                                            </div>
+                                            <div class="device-sensor-summary-grid">
+                                                {% if row["status_summary"] %}
+                                                <span class="device-sensor-chip">{{ row["status_summary"] }}</span>
+                                                {% else %}
+                                                <span class="device-sensor-chip is-empty">暂无状态摘要</span>
+                                                {% end %}
+                                                {% if row["raw_status_text"] %}
+                                                <span class="device-sensor-chip">{{ row["raw_status_text"] }}</span>
+                                                {% end %}
+                                            </div>
+                                        </div>
                                         <div class="device-sensor-panel device-sensor-panel-inline">
                                             <div class="device-sensor-header">
                                                 <strong>传感器</strong>
@@ -169,6 +185,12 @@
                                         <label class="layui-form-label">设备类别</label>
                                         <div class="layui-input-block">
                                             <input class="layui-input" name="category" value="{% if editing %}{{ editing['device']['category'] }}{% end %}" placeholder="例如 环境监测 / 灯控">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">备注</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="remark" value="{% if editing %}{{ editing['device']['remark'] }}{% end %}" placeholder="请输入设备备注">
                                         </div>
                                     </div>
 

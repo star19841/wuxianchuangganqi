@@ -32,6 +32,18 @@ def _build_runtime_summary(row):
         return "已收到设备上报消息，下面展示最近运行记录。"
     if row["online_count"] > 0:
         return "已有设备在线，当前正在等待新的上报消息。"
+    latest_event = (row.get("recent_events") or [])[-1] if row.get("recent_events") else None
+    if row["is_running"] and latest_event:
+        latest_type = (latest_event.get("event_type") or "").strip()
+        latest_box_id = (latest_event.get("box_id") or "").strip()
+        if latest_type == "device_offline":
+            if latest_box_id:
+                return f"设备 {latest_box_id} 已离线，TCPServer 仍在监听，等待重新连接。"
+            return "设备已离线，TCPServer 仍在监听，等待重新连接。"
+        if latest_type == "device_disconnect_error":
+            if latest_box_id:
+                return f"设备 {latest_box_id} 异常断开，TCPServer 仍在监听，等待重新连接。"
+            return "设备异常断开，TCPServer 仍在监听，等待重新连接。"
     if row["is_running"]:
         return "TCPServer 正在监听，等待设备主动接入并上报 boxid / deviceid。"
     return "服务当前未运行，启动后即可接收设备主动上报的消息。"
@@ -40,6 +52,8 @@ def _build_runtime_summary(row):
 def _decorate_server_rows(rows):
     server_ids = [row["id"] for row in rows]
     messages_by_server = AiotServerRepository.list_recent_messages_by_server_ids(server_ids)
+    events_by_server = AiotServerRepository.list_recent_events_by_server_ids(server_ids)
+    recent_devices_by_server = AiotServerRepository.list_recent_reported_devices_by_server_ids(server_ids)
     online_devices_by_server = AiotServerRepository.list_online_devices_by_server_ids(server_ids)
     decorated = []
     for row in rows:
@@ -47,7 +61,12 @@ def _decorate_server_rows(rows):
         recent_messages = [dict(message) for message in reversed(messages_by_server.get(row["id"], []))]
         for message in recent_messages:
             message["created_at"] = _format_message_created_at(message["created_at"])
+        recent_events = [dict(event) for event in reversed(events_by_server.get(row["id"], []))]
+        for event in recent_events:
+            event["created_at"] = _format_message_created_at(event["created_at"])
         item["recent_messages"] = recent_messages
+        item["recent_events"] = recent_events
+        item["recent_reported_devices"] = [dict(device) for device in recent_devices_by_server.get(row["id"], [])]
         item["online_devices"] = online_devices_by_server.get(row["id"], [])
         item["runtime_summary"] = _build_runtime_summary(item)
         decorated.append(item)
@@ -85,6 +104,23 @@ def _serialize_server_runtime(row):
                 "created_at": message["created_at"],
             }
             for message in row["recent_messages"]
+        ],
+        "recent_events": [
+            {
+                "box_id": event["box_id"],
+                "event_type": event["event_type"],
+                "event_summary": event["event_summary"],
+                "created_at": event["created_at"],
+            }
+            for event in row["recent_events"]
+        ],
+        "recent_reported_devices": [
+            {
+                "box_id": device["box_id"],
+                "last_event_type": device["last_event_type"],
+                "event_summary": device["event_summary"],
+            }
+            for device in row["recent_reported_devices"]
         ],
         "online_devices": [
             {

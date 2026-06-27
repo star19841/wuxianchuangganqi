@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const addSensorButton = document.querySelector("[data-add-sensor]");
   const autoRefreshTarget = document.querySelector("[data-auto-refresh-seconds]");
   const commandForm = document.querySelector("[data-command-form]");
+  const commandPickerModal = document.querySelector("[data-command-picker-modal]");
   const modelChatModal = document.querySelector("[data-model-chat-modal]");
   const modelChatMessages = document.querySelector("[data-model-chat-messages]");
   const modelChatInput = document.querySelector("[data-model-chat-input]");
@@ -57,6 +58,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll("[data-message-stream]").forEach((stream) => {
       stream.scrollTop = stream.scrollHeight;
     });
+    document.querySelectorAll("[data-recent-events]").forEach((stream) => {
+      stream.scrollTop = stream.scrollHeight;
+    });
   };
 
   const escapeHtml = (value) =>
@@ -90,6 +94,35 @@ document.addEventListener("DOMContentLoaded", () => {
               <time>${escapeHtml(message.created_at || "")}</time>
             </div>
             <p>${escapeHtml(message.message_text || "")}</p>
+          </article>
+        `,
+      )
+      .join("");
+
+  const renderRecentEvents = (events) =>
+    (events || [])
+      .map(
+        (event) => `
+          <article class="aiot-message-item aiot-event-item">
+            <div class="aiot-message-head">
+              <span class="aiot-message-source">${escapeHtml(event.box_id || "SYSTEM")}</span>
+              <time>${escapeHtml(event.created_at || "")}</time>
+            </div>
+            <p>${escapeHtml(event.event_type || "")}${event.event_summary ? ` / ${escapeHtml(event.event_summary)}` : ""}</p>
+          </article>
+        `,
+      )
+      .join("");
+
+  const renderRecentReportedDevices = (devices) =>
+    (devices || [])
+      .map(
+        (device) => `
+          <article class="aiot-message-item">
+            <div class="aiot-message-head">
+              <span class="aiot-message-source">${escapeHtml(device.box_id || "")}</span>
+            </div>
+            <p>${escapeHtml(device.last_event_type || "")}${device.event_summary ? ` / ${escapeHtml(device.event_summary)}` : ""}</p>
           </article>
         `,
       )
@@ -283,26 +316,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return options.join("");
   };
 
-  const renderSensorOptions = (sensors) => {
-    const options = [
-      `<option value="">${sensors.length > 0 ? "选择传感器" : "暂无可选传感器"}</option>`,
-    ];
-    sensors.forEach((sensor) => {
-      const labelParts = [sensor.sensor_name, sensor.pin_code];
-      if (sensor.pin_remark) {
-        labelParts.push(sensor.pin_remark);
-      }
-      options.push(
-        `<option value="${escapeHtml(`${sensor.sensor_name}|${sensor.pin_code}`)}">${escapeHtml(labelParts.join(" / "))}</option>`,
-      );
-    });
-    return options.join("");
-  };
-
   const rerenderLayuiSelects = () => {
     if (window.layui?.form?.render) {
       window.layui.form.render("select");
     }
+  };
+
+  const openCommandPicker = () => {
+    if (!commandPickerModal) {
+      return;
+    }
+    commandPickerModal.classList.remove("is-hidden");
+    document.body?.classList?.add("has-command-picker-open");
+  };
+
+  const closeCommandPicker = () => {
+    if (!commandPickerModal) {
+      return;
+    }
+    commandPickerModal.classList.add("is-hidden");
+    document.body?.classList?.remove("has-command-picker-open");
   };
 
   const updateCommandPanel = (servers) => {
@@ -311,10 +344,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const deviceSelect = commandForm.querySelector("[data-online-device-select]");
-    const sensorSelect = commandForm.querySelector("[data-sensor-select]");
     const commandInput = commandForm.querySelector("[data-command-input]");
+    const commandDisplay = commandForm.querySelector("[data-command-display]");
     const serverIdInput = commandForm.querySelector("[data-command-server-id]");
-    if (!deviceSelect || !sensorSelect || !commandInput || !serverIdInput) {
+    const commandPickerOpen = commandForm.querySelector("[data-command-picker-open]");
+    const commandPickerLabel = commandForm.querySelector("[data-command-picker-label]");
+    if (!deviceSelect || !commandInput || !commandDisplay || !serverIdInput || !commandPickerOpen) {
       return;
     }
 
@@ -337,13 +372,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectedDevice) {
       deviceSelect.value = selectedDevice.box_id;
       serverIdInput.value = `${selectedDevice.server_id}`;
-      sensorSelect.innerHTML = renderSensorOptions(selectedDevice.sensors || []);
-      sensorSelect.disabled = false;
     } else {
       deviceSelect.value = "";
       serverIdInput.value = "0";
-      sensorSelect.innerHTML = renderSensorOptions([]);
-      sensorSelect.disabled = false;
+    }
+    commandPickerOpen.disabled = false;
+    if (!commandInput.value) {
+      commandDisplay.value = "";
+      commandDisplay.placeholder = "点击左侧选择命令，例如 led_on / get_status";
+      if (commandPickerLabel) {
+        commandPickerLabel.textContent = "选择命令";
+      }
     }
     rerenderLayuiSelects();
   };
@@ -365,6 +404,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const runningDot = card.querySelector("[data-running-dot]");
     const messageStream = card.querySelector("[data-message-stream]");
     const messageEmpty = card.querySelector("[data-message-empty]");
+    const recentEvents = card.querySelector("[data-recent-events]");
+    const recentReportedDevices = card.querySelector("[data-recent-reported-devices]");
 
     if (onlineCount) {
       onlineCount.textContent = `${server.online_count ?? 0}`;
@@ -403,6 +444,12 @@ document.addEventListener("DOMContentLoaded", () => {
         messageStream.classList.add("is-hidden");
         messageEmpty.classList.remove("is-hidden");
       }
+    }
+    if (recentEvents) {
+      recentEvents.innerHTML = renderRecentEvents(server.recent_events || []);
+    }
+    if (recentReportedDevices) {
+      recentReportedDevices.innerHTML = renderRecentReportedDevices(server.recent_reported_devices || []);
     }
   };
 
@@ -574,31 +621,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (commandForm) {
     const deviceSelect = commandForm.querySelector("[data-online-device-select]");
-    const sensorSelect = commandForm.querySelector("[data-sensor-select]");
     const commandInput = commandForm.querySelector("[data-command-input]");
+    const commandDisplay = commandForm.querySelector("[data-command-display]");
     const serverIdInput = commandForm.querySelector("[data-command-server-id]");
+    const commandPickerOpen = commandForm.querySelector("[data-command-picker-open]");
+    const commandPickerLabel = commandForm.querySelector("[data-command-picker-label]");
 
-    if (deviceSelect && sensorSelect && commandInput && serverIdInput) {
+    if (deviceSelect && commandInput && commandDisplay && serverIdInput && commandPickerOpen) {
       deviceSelect.addEventListener("change", () => {
         const selectedDevice = latestOnlineDevices.find((device) => device.box_id === deviceSelect.value) || null;
         if (!selectedDevice) {
           serverIdInput.value = "0";
-          sensorSelect.innerHTML = renderSensorOptions([]);
-          sensorSelect.disabled = true;
           return;
         }
         serverIdInput.value = `${selectedDevice.server_id}`;
-        sensorSelect.innerHTML = renderSensorOptions(selectedDevice.sensors || []);
-        sensorSelect.disabled = (selectedDevice.sensors || []).length === 0;
-        sensorSelect.value = "";
       });
-
-      sensorSelect.addEventListener("change", () => {
-        if (!sensorSelect.value) {
-          return;
-        }
-        const [sensorName = "", pinCode = ""] = sensorSelect.value.split("|");
-        commandInput.value = `sensor ${sensorName} ${pinCode}`.trim();
+      commandPickerOpen.addEventListener("click", openCommandPicker);
+      commandPickerModal?.querySelectorAll("[data-command-picker-close]").forEach((button) => {
+        button.addEventListener("click", closeCommandPicker);
+      });
+      commandPickerModal?.querySelectorAll("[data-command-preset]").forEach((button) => {
+        button.addEventListener("click", () => {
+          commandInput.value = (button.dataset.commandPreset || "").trim();
+          const label = (button.dataset.commandLabel || button.textContent || "").trim();
+          commandDisplay.value = label;
+          if (commandPickerLabel) {
+            commandPickerLabel.textContent = label || "选择命令";
+          }
+          closeCommandPicker();
+        });
       });
     }
   }

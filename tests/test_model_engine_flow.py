@@ -132,7 +132,7 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
                             {
                                 "reply": "已为您打开客厅开发板 LED。",
                                 "target_box_id": "BOX-AI-01",
-                                "command_text": "on",
+                                "command_text": "led_on",
                             },
                             ensure_ascii=False,
                         )
@@ -169,8 +169,8 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(payload["reply"], "已为您打开客厅开发板 LED。")
         self.assertTrue(payload["command_sent"])
-        self.assertEqual(payload["command_text"], "on")
-        self.assertEqual(fake_manager.calls, [(server_id, "BOX-AI-01", "on")])
+        self.assertEqual(payload["command_text"], "led_on")
+        self.assertEqual(fake_manager.calls, [(server_id, "BOX-AI-01", "led_on")])
 
     def test_parse_aiot_chat_response_extracts_json_from_markdown_block(self):
         from app.controllers.model_engine import _parse_aiot_chat_response
@@ -188,7 +188,7 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(payload["target_box_id"], "12345")
         self.assertEqual(payload["command_text"], "off")
 
-    def test_aiot_chat_system_prompt_uses_simple_light_commands(self):
+    def test_aiot_chat_system_prompt_uses_board_command_names(self):
         from app.controllers.model_engine import _build_aiot_chat_system_prompt
 
         prompt = _build_aiot_chat_system_prompt(
@@ -204,9 +204,10 @@ class ModelEngineFlowTestCase(AsyncHTTPTestCase):
             ]
         )
 
-        self.assertIn("on", prompt)
-        self.assertIn("off", prompt)
-        self.assertIn("status", prompt)
+        self.assertIn("led_on", prompt)
+        self.assertIn("led_off", prompt)
+        self.assertIn("get_status", prompt)
+        self.assertIn("get_sensor", prompt)
         self.assertNotIn("sensor LED GPIO15 on", prompt)
 
     def test_model_chat_endpoint_uses_extended_timeout(self):

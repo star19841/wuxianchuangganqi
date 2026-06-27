@@ -39,13 +39,40 @@ class AuthFlowTestCase(AsyncHTTPTestCase):
         for item in set_cookie:
             if "_xsrf=" in item:
                 return item.split("_xsrf=")[1].split(";")[0]
-        self.fail("未获取到 _xsrf cookie")
+        self.fail("missing _xsrf cookie")
 
     def _form_headers(self, xsrf_value):
         return {
             "Content-Type": "application/x-www-form-urlencoded",
             "Cookie": f"_xsrf={xsrf_value}",
         }
+
+    def _split_cookies(self, response):
+        cookies = {}
+        for item in response.headers.get_list("Set-Cookie"):
+            name, value = item.split(";", 1)[0].split("=", 1)
+            cookies[name] = value
+        return cookies
+
+    def _login_cookies(self, username="star", password="12345678"):
+        login_page = self.fetch("/auth/login")
+        cookies = self._split_cookies(login_page)
+        xsrf_value = cookies["_xsrf"]
+        body = urllib.parse.urlencode(
+            {"username": username, "password": password, "_xsrf": xsrf_value}
+        )
+        response = self.fetch(
+            "/auth/login",
+            method="POST",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Cookie": f"_xsrf={xsrf_value}",
+            },
+            body=body,
+            follow_redirects=False,
+        )
+        cookies.update(self._split_cookies(response))
+        return cookies
 
     def test_default_admin_can_login(self):
         xsrf_value = self._xsrf_cookie()
@@ -71,6 +98,14 @@ class AuthFlowTestCase(AsyncHTTPTestCase):
             self.assertIn('auth-card ops-auth-card', html)
             self.assertIn("CdutAgentOS", html)
 
+    def test_register_page_uses_single_column_fields(self):
+        response = self.fetch("/auth/register")
+        html = response.body.decode("utf-8")
+
+        self.assertEqual(response.code, 200)
+        self.assertNotIn("layui-col-md6", html)
+        self.assertNotIn("layui-row layui-col-space16", html)
+
     def test_register_accepts_display_name_and_phone(self):
         xsrf_value = self._xsrf_cookie()
         body = urllib.parse.urlencode(
@@ -78,7 +113,7 @@ class AuthFlowTestCase(AsyncHTTPTestCase):
                 "username": "newuser",
                 "password": "pass12345",
                 "password2": "pass12345",
-                "display_name": "新用户",
+                "display_name": "New User",
                 "phone": "13900001111",
                 "_xsrf": xsrf_value,
             }
@@ -93,14 +128,14 @@ class AuthFlowTestCase(AsyncHTTPTestCase):
         self.assertEqual(response.code, 302)
         self.assertEqual(response.headers["Location"], "/auth/login")
         created = UserRepository.get_user_by_username("newuser")
-        self.assertEqual(created["display_name"], "新用户")
+        self.assertEqual(created["display_name"], "New User")
         self.assertEqual(created["phone"], "13900001111")
 
     def test_disabled_user_cannot_login(self):
         UserRepository.create_user(
             username="disabled_user",
             password="pass12345",
-            display_name="禁用用户",
+            display_name="Disabled User",
             phone="13900002222",
         )
         UserRepository.set_user_disabled("disabled_user", True)
@@ -115,7 +150,34 @@ class AuthFlowTestCase(AsyncHTTPTestCase):
             body=body,
         )
         self.assertEqual(response.code, 403)
-        self.assertIn("已被禁用", response.body.decode("utf-8"))
+        self.assertIn("当前账号已被禁用", response.body.decode("utf-8"))
+
+    def test_deleting_current_user_redirects_to_login(self):
+        UserRepository.create_user(
+            username="selfremove",
+            password="pass12345",
+            display_name="Self Remove",
+            phone="13900003333",
+        )
+        target_user = UserRepository.get_user_by_username("selfremove")
+        cookies = self._login_cookies(username="selfremove", password="pass12345")
+        xsrf_value = cookies["_xsrf"]
+        cookie_header = "; ".join(f"{key}={value}" for key, value in cookies.items())
+        body = urllib.parse.urlencode({"user_id": str(target_user["id"]), "_xsrf": xsrf_value})
+
+        response = self.fetch(
+            "/users/delete",
+            method="POST",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Cookie": cookie_header,
+            },
+            body=body,
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.code, 302)
+        self.assertEqual(response.headers["Location"], "/auth/login")
 
 
 if __name__ == "__main__":

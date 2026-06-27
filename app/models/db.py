@@ -79,6 +79,9 @@ def init_db():
         _ensure_column(conn, "devices", "online_status", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "devices", "last_seen_at", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "devices", "connected_server_id", "INTEGER")
+        _ensure_column(conn, "devices", "remark", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "devices", "status_summary", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "devices", "raw_status_text", "TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS aiot_server_messages (
@@ -86,6 +89,20 @@ def init_db():
                 server_id INTEGER NOT NULL,
                 box_id TEXT NOT NULL DEFAULT '',
                 message_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(server_id) REFERENCES aiot_servers(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS aiot_server_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                server_id INTEGER NOT NULL,
+                box_id TEXT NOT NULL DEFAULT '',
+                event_type TEXT NOT NULL,
+                event_summary TEXT NOT NULL DEFAULT '',
+                raw_payload TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY(server_id) REFERENCES aiot_servers(id)
             )
@@ -121,6 +138,13 @@ def init_db():
         conn.execute("UPDATE aiot_servers SET is_running = 0")
         conn.execute(
             """
+            UPDATE devices
+            SET online_status = 0,
+                connected_server_id = NULL
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS model_engines (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -151,7 +175,9 @@ def init_db():
             """
         )
     from app.models.user import UserRepository
+    from app.models.api_service import ApiServiceRepository
     from app.models.model_engine import ModelEngineRepository
 
     UserRepository.ensure_default_admin()
     ModelEngineRepository.ensure_default_model()
+    ApiServiceRepository.ensure_builtin_services()

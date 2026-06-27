@@ -1,10 +1,12 @@
 import importlib.util
+import json
 import os
 import shutil
 import tempfile
 import unittest
 import urllib.parse
 from pathlib import Path
+from unittest import mock
 
 from tornado.testing import AsyncHTTPTestCase
 
@@ -68,7 +70,39 @@ class ApiServiceFlowTestCase(AsyncHTTPTestCase):
         html = response.body.decode("utf-8")
         self.assertEqual(response.code, 200)
         self.assertIn("接口管理", html)
-        self.assertIn("模型引擎", html)
+        self.assertIn("第三方接口管理", html)
+
+    def test_weather_proxy_endpoint_supports_wttr_city_template(self):
+        class FakeResponse:
+            def __init__(self, payload):
+                self.status = 200
+                self._payload = payload
+
+            def read(self):
+                return self._payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        captured = {}
+
+        def fake_urlopen(request, timeout=8):
+            captured["url"] = request.full_url
+            captured["timeout"] = timeout
+            return FakeResponse(b'{"current_condition":[{"temp_C":"28"}]}')
+
+        with mock.patch("app.controllers.api_service.urlopen", side_effect=fake_urlopen):
+            response = self.fetch("/api-services/weather?city=chengdu")
+
+        payload = json.loads(response.body.decode("utf-8"))
+        self.assertEqual(response.code, 200)
+        self.assertEqual(payload["city"], "chengdu")
+        self.assertIn("https://wttr.in/chengdu?format=j1", captured["url"])
+        self.assertEqual(captured["timeout"], 20)
+        self.assertEqual(payload["data"]["current_condition"][0]["temp_C"], "28")
 
 
 if __name__ == "__main__":

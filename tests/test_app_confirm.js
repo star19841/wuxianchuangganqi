@@ -10,8 +10,10 @@ function loadAppEnvironment({
   activeElement = null,
   visibilityState = "visible",
   messageStreams = [],
+  recentEventStreams = [],
   serverCard = null,
   commandForm = null,
+  commandPickerModal = null,
   fetchImpl = async () => ({ ok: true, json: async () => ({ servers: [] }) }),
   flashDataset = {},
   initialUrl = "http://localhost/aiot-servers?success=test",
@@ -29,6 +31,9 @@ function loadAppEnvironment({
   const document = {
     visibilityState,
     activeElement,
+    body: {
+      classList: createClassList(),
+    },
     addEventListener(eventName, handler) {
       if (eventName === "DOMContentLoaded") {
         domReadyHandler = handler;
@@ -47,6 +52,9 @@ function loadAppEnvironment({
       if (selector === "[data-command-form]") {
         return commandForm;
       }
+      if (selector === "[data-command-picker-modal]") {
+        return commandPickerModal;
+      }
       return null;
     },
     querySelectorAll(selector) {
@@ -55,6 +63,9 @@ function loadAppEnvironment({
       }
       if (selector === "[data-message-stream]") {
         return messageStreams;
+      }
+      if (selector === "[data-recent-events]") {
+        return recentEventStreams;
       }
       return [];
     },
@@ -85,6 +96,10 @@ function loadAppEnvironment({
     setInterval(callback, delay) {
       timers.push({ callback, delay });
       return timers.length;
+    },
+    setTimeout(callback) {
+      callback();
+      return 1;
     },
     fetch: fetchImpl,
     location: {
@@ -249,6 +264,8 @@ function createServerCard() {
   const messageEmpty = {
     classList: createClassList(["is-hidden"]),
   };
+  const recentEvents = createMessageStream();
+  const recentReportedDevices = { innerHTML: "" };
 
   return {
     classList: createClassList(),
@@ -263,6 +280,8 @@ function createServerCard() {
         "[data-running-dot]": runningDot,
         "[data-message-stream]": messageStream,
         "[data-message-empty]": messageEmpty,
+        "[data-recent-events]": recentEvents,
+        "[data-recent-reported-devices]": recentReportedDevices,
       };
       return mapping[selector] || null;
     },
@@ -275,6 +294,8 @@ function createServerCard() {
     runningDot,
     messageStream,
     messageEmpty,
+    recentEvents,
+    recentReportedDevices,
   };
 }
 
@@ -296,25 +317,89 @@ function createSelectNode() {
   };
 }
 
+function createButtonNode() {
+  const listeners = new Map();
+  return {
+    disabled: false,
+    dataset: {},
+    textContent: "",
+    addEventListener(eventName, handler) {
+      listeners.set(eventName, handler);
+    },
+    dispatchClick() {
+      const handler = listeners.get("click");
+      if (handler) {
+        handler({ preventDefault() {} });
+      }
+    },
+    focus() {},
+  };
+}
+
+function createCommandPreset(commandValue, commandLabel) {
+  const button = createButtonNode();
+  button.dataset.commandPreset = commandValue;
+  button.dataset.commandLabel = commandLabel;
+  return button;
+}
+
+function createCommandPickerModal() {
+  const classList = createClassList(["is-hidden"]);
+  const closeButton = createButtonNode();
+  const presetButtons = [
+    createCommandPreset("led_on", "led_on"),
+    createCommandPreset("led_off", "led_off"),
+    createCommandPreset("beep_on", "beep_on"),
+    createCommandPreset("beep_off", "beep_off"),
+    createCommandPreset("mode_auto", "mode_auto"),
+    createCommandPreset("mode_manual", "mode_manual"),
+    createCommandPreset("screen_on", "screen_on"),
+    createCommandPreset("screen_off", "screen_off"),
+    createCommandPreset("report_on", "report_on"),
+    createCommandPreset("report_off", "report_off"),
+    createCommandPreset("get_status", "get_status"),
+    createCommandPreset("get_sensor", "get_sensor"),
+    createCommandPreset("help", "help"),
+  ];
+
+  return {
+    classList,
+    querySelectorAll(selector) {
+      if (selector === "[data-command-picker-close]") {
+        return [closeButton];
+      }
+      if (selector === "[data-command-preset]") {
+        return presetButtons;
+      }
+      return [];
+    },
+    closeButton,
+    presetButtons,
+  };
+}
+
 function createCommandForm() {
   const deviceSelect = createSelectNode();
-  const sensorSelect = createSelectNode();
   const commandInput = { value: "" };
+  const commandDisplay = { value: "", placeholder: "" };
   const serverIdInput = { value: "0" };
+  const commandPickerOpen = createButtonNode();
   return {
     querySelector(selector) {
       const mapping = {
         "[data-online-device-select]": deviceSelect,
-        "[data-sensor-select]": sensorSelect,
         "[data-command-input]": commandInput,
+        "[data-command-display]": commandDisplay,
         "[data-command-server-id]": serverIdInput,
+        "[data-command-picker-open]": commandPickerOpen,
       };
       return mapping[selector] || null;
     },
     deviceSelect,
-    sensorSelect,
     commandInput,
+    commandDisplay,
     serverIdInput,
+    commandPickerOpen,
   };
 }
 
@@ -413,50 +498,24 @@ test("local runtime polling still runs while a select is focused", async () => {
   assert.equal(fetchCount, 1);
 });
 
-test("selecting a sensor fills the command input with sensor and pin", async () => {
-  const serverCard = createServerCard();
+test("selecting a command preset fills the hidden command input", () => {
   const commandForm = createCommandForm();
-  const environment = loadAppEnvironment({
-    autoRefreshElement: createAutoRefreshElement(5),
-    flashDataset: { success: "", error: "", aiotRuntimeUrl: "/aiot-servers/runtime?page=1&keyword=" },
-    messageStreams: [serverCard.messageStream],
-    serverCard,
+  const commandPickerModal = createCommandPickerModal();
+
+  loadAppEnvironment({
+    flashDataset: { success: "", error: "" },
     commandForm,
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({
-        servers: [
-          {
-            id: 1,
-            online_count: 1,
-            online_box_ids: "BOX-01",
-            is_running: true,
-            is_enabled: true,
-            runtime_summary: "ready",
-            recent_messages: [],
-            online_devices: [
-              {
-                box_id: "BOX-01",
-                device_name: "Living Screen",
-                sensors: [
-                  { sensor_name: "OLED", pin_code: "GPIO21", pin_remark: "SDA" },
-                ],
-              },
-            ],
-          },
-        ],
-      }),
-    }),
+    commandPickerModal,
   });
 
-  await environment.timers[0].callback();
-  commandForm.deviceSelect.value = "BOX-01";
-  commandForm.deviceSelect.dispatchChange();
-  commandForm.sensorSelect.value = "OLED|GPIO21";
-  commandForm.sensorSelect.dispatchChange();
+  commandForm.commandPickerOpen.dispatchClick();
+  assert.equal(commandPickerModal.classList.contains("is-hidden"), false);
 
-  assert.match(commandForm.sensorSelect.innerHTML, /OLED/);
-  assert.equal(commandForm.commandInput.value, "sensor OLED GPIO21");
+  commandPickerModal.presetButtons[0].dispatchClick();
+
+  assert.equal(commandForm.commandInput.value, "led_on");
+  assert.equal(commandForm.commandDisplay.value, "led_on");
+  assert.equal(commandPickerModal.classList.contains("is-hidden"), true);
 });
 
 test("runtime polling rerenders layui selects after online device options change", async () => {
@@ -466,6 +525,7 @@ test("runtime polling rerenders layui selects after online device options change
     autoRefreshElement: createAutoRefreshElement(5),
     flashDataset: { success: "", error: "", aiotRuntimeUrl: "/aiot-servers/runtime?page=1&keyword=" },
     messageStreams: [serverCard.messageStream],
+    recentEventStreams: [serverCard.recentEvents],
     serverCard,
     commandForm,
     fetchImpl: async () => ({
@@ -500,6 +560,58 @@ test("runtime polling rerenders layui selects after online device options change
   assert.equal(environment.getLayuiRenderCount(), 1);
 });
 
+test("runtime polling renders recent events without changing sendable device source", async () => {
+  const serverCard = createServerCard();
+  const commandForm = createCommandForm();
+  const environment = loadAppEnvironment({
+    autoRefreshElement: createAutoRefreshElement(5),
+    flashDataset: { success: "", error: "", aiotRuntimeUrl: "/aiot-servers/runtime?page=1&keyword=" },
+    messageStreams: [serverCard.messageStream],
+    recentEventStreams: [serverCard.recentEvents],
+    serverCard,
+    commandForm,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        servers: [
+          {
+            id: 1,
+            online_count: 0,
+            online_box_ids: "",
+            is_running: true,
+            is_enabled: true,
+            runtime_summary: "running",
+            recent_messages: [],
+            recent_events: [
+              {
+                box_id: "BOX-R-01",
+                event_type: "device_offline",
+                event_summary: "device disconnected",
+                created_at: "2026-06-27 08:00:00",
+              },
+            ],
+            recent_reported_devices: [
+              {
+                box_id: "BOX-R-01",
+                last_event_type: "device_offline",
+                event_summary: "device disconnected",
+              },
+            ],
+            online_devices: [],
+          },
+        ],
+      }),
+    }),
+  });
+
+  await environment.timers[0].callback();
+
+  assert.match(serverCard.recentEvents.innerHTML, /device_offline/);
+  assert.equal(serverCard.recentEvents.scrollTop, serverCard.recentEvents.scrollHeight);
+  assert.match(serverCard.recentReportedDevices.innerHTML, /BOX-R-01/);
+  assert.equal(commandForm.deviceSelect.disabled, false);
+});
+
 test("command panel stays clickable when there are no online devices", async () => {
   const commandForm = createCommandForm();
   const environment = loadAppEnvironment({
@@ -515,8 +627,7 @@ test("command panel stays clickable when there are no online devices", async () 
   await environment.timers[0].callback();
 
   assert.equal(commandForm.deviceSelect.disabled, false);
-  assert.equal(commandForm.sensorSelect.disabled, false);
+  assert.equal(commandForm.commandPickerOpen.disabled, false);
   assert.match(commandForm.deviceSelect.innerHTML, /暂无在线设备/);
-  assert.match(commandForm.sensorSelect.innerHTML, /暂无可选传感器/);
   assert.equal(environment.getLayuiRenderCount(), 1);
 });

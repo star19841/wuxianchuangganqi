@@ -1,4 +1,4 @@
-"""接口管理控制器。"""
+"""API service handlers."""
 
 import json
 import math
@@ -12,6 +12,7 @@ from app.models.api_service import ApiServiceRepository
 
 
 API_PAGE_SIZE = 20
+API_TEST_TIMEOUT = 20
 
 
 def _service_form_payload(handler):
@@ -33,9 +34,38 @@ def _append_query_to_url(raw_url, params):
     return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, query, parsed.fragment))
 
 
+def _resolve_weather_request(service, city):
+    params = json.loads(service["sample_params"] or "{}")
+    weather_city = city or params.get("city") or params.get("location") or "chengdu"
+    format_name = params.get("format") or "j1"
+
+    base_url = service["base_url"].strip().rstrip("/")
+    if "{city}" in base_url:
+        url = base_url.replace("{city}", quote(str(weather_city)))
+    else:
+        url = f"{base_url}/{quote(str(weather_city))}"
+    url = _append_query_to_url(url, {"format": format_name})
+    headers = json.loads(service["headers_json"] or "{}")
+    return url, headers, weather_city
+
+
+def _fetch_weather_payload(city):
+    service = ApiServiceRepository.get_enabled_service_by_category("天气")
+    if not service:
+        ApiServiceRepository.ensure_builtin_services()
+        service = ApiServiceRepository.get_enabled_service_by_category("天气")
+    url, headers, weather_city = _resolve_weather_request(service, city)
+    request = Request(url, headers=headers, method="GET")
+    with urlopen(request, timeout=API_TEST_TIMEOUT) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+        status = getattr(response, "status", 200)
+    return {"city": weather_city, "url": url, "status": status, "data": payload}
+
+
 class ApiServiceListHandler(BaseHandler):
     @tornado.web.authenticated
     def get(self):
+        ApiServiceRepository.ensure_builtin_services()
         keyword = (self.get_argument("keyword", "") or "").strip()
         page = max(int(self.get_argument("page", "1") or "1"), 1)
         edit_id = int(self.get_argument("edit_id", "0") or "0")
@@ -119,15 +149,30 @@ class ApiServiceTestHandler(BaseHandler):
             sample_params = json.loads(service["sample_params"] or "{}")
             body = None
             url = service["base_url"]
-            if service["method"] == "GET":
+            if service["category"] == "天气":
+                url, headers, _weather_city = _resolve_weather_request(service, sample_params.get("city"))
+            elif service["method"] == "GET":
                 url = _append_query_to_url(url, sample_params)
             else:
                 body = json.dumps(sample_params).encode("utf-8")
                 headers.setdefault("Content-Type", "application/json")
 
             request = Request(url, data=body, headers=headers, method=service["method"])
-            with urlopen(request, timeout=8) as response:
+            with urlopen(request, timeout=API_TEST_TIMEOUT) as response:
                 status = response.status
             self.redirect(f"/api-services?success={quote(f'联通成功，状态码 {status}')}")
         except Exception as exc:  # noqa: BLE001
             self.redirect(f"/api-services?error={quote(f'联通失败：{exc}')}")
+
+
+class ApiServiceWeatherHandler(tornado.web.RequestHandler):
+    def get(self):
+        city = (self.get_argument("city", "chengdu") or "chengdu").strip()
+        try:
+            payload = _fetch_weather_payload(city)
+        except Exception as exc:  # noqa: BLE001
+            self.set_status(502)
+            self.write({"error": f"天气接口请求失败: {exc}"})
+            return
+        self.set_header("Content-Type", "application/json; charset=utf-8")
+        self.write(payload)

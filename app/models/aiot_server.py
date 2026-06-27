@@ -128,6 +128,87 @@ class AiotServerRepository:
         return grouped
 
     @staticmethod
+    def append_server_event(server_id, box_id, event_type, event_summary="", raw_payload=""):
+        cleaned_box_id = (box_id or "").strip()
+        cleaned_type = (event_type or "").strip()
+        if not cleaned_type:
+            return
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO aiot_server_events (server_id, box_id, event_type, event_summary, raw_payload)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    server_id,
+                    cleaned_box_id,
+                    cleaned_type[:64],
+                    (event_summary or "").strip()[:255],
+                    (raw_payload or "").strip()[:1000],
+                ),
+            )
+
+    @staticmethod
+    def list_recent_events_by_server_ids(server_ids, limit_per_server=6):
+        normalized_ids = [int(server_id) for server_id in server_ids if server_id]
+        if not normalized_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in normalized_ids)
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, server_id, box_id, event_type, event_summary, raw_payload, created_at
+                FROM aiot_server_events
+                WHERE server_id IN ({placeholders})
+                ORDER BY id DESC
+                """,
+                normalized_ids,
+            ).fetchall()
+
+        grouped = {server_id: [] for server_id in normalized_ids}
+        for row in rows:
+            events = grouped.setdefault(row["server_id"], [])
+            if len(events) >= limit_per_server:
+                continue
+            events.append(row)
+        return grouped
+
+    @staticmethod
+    def list_recent_reported_devices_by_server_ids(server_ids, limit_per_server=5):
+        normalized_ids = [int(server_id) for server_id in server_ids if server_id]
+        if not normalized_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in normalized_ids)
+        with get_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT recent.server_id, recent.box_id, recent.event_type AS last_event_type, recent.event_summary
+                FROM aiot_server_events recent
+                INNER JOIN (
+                    SELECT server_id, box_id, MAX(id) AS latest_id
+                    FROM aiot_server_events
+                    WHERE server_id IN ({placeholders}) AND box_id <> ''
+                    GROUP BY server_id, box_id
+                ) latest
+                  ON latest.server_id = recent.server_id
+                 AND latest.box_id = recent.box_id
+                 AND latest.latest_id = recent.id
+                ORDER BY recent.id DESC
+                """,
+                normalized_ids,
+            ).fetchall()
+
+        grouped = {server_id: [] for server_id in normalized_ids}
+        for row in rows:
+            devices = grouped.setdefault(row["server_id"], [])
+            if len(devices) >= limit_per_server:
+                continue
+            devices.append(dict(row))
+        return grouped
+
+    @staticmethod
     def list_online_devices_by_server_ids(server_ids):
         normalized_ids = [int(server_id) for server_id in server_ids if server_id]
         if not normalized_ids:
@@ -234,4 +315,5 @@ class AiotServerRepository:
                 (server_id,),
             )
             conn.execute("DELETE FROM aiot_server_messages WHERE server_id = ?", (server_id,))
+            conn.execute("DELETE FROM aiot_server_events WHERE server_id = ?", (server_id,))
             conn.execute("DELETE FROM aiot_servers WHERE id = ?", (server_id,))

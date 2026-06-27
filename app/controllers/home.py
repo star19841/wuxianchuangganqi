@@ -104,5 +104,10 @@ class UserDeleteHandler(BaseHandler):
         if user and user["username"] == "star":
             self.redirect(f"/?page={page}&keyword={keyword}&error=默认管理员不允许删除")
             return
+        deleted_current_user = bool(user and user["username"] == self.current_user)
         UserRepository.delete_user(user_id)
+        if deleted_current_user:
+            self.clear_cookie("username")
+            self.redirect("/auth/login")
+            return
         self.redirect(f"/?page={page}&keyword={keyword}&success=用户已删除")

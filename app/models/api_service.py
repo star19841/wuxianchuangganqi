@@ -1,11 +1,34 @@
-"""第三方接口数据访问层。"""
+"""Third-party API service repository."""
 
+import json
 import sqlite3
 
 from app.models.db import get_connection
 
 
 class ApiServiceRepository:
+    BUILTIN_WEATHER_SERVICE = {
+        "name": "天气查询接口",
+        "category": "天气",
+        "base_url": "https://wttr.in/{city}",
+        "method": "GET",
+        "headers_json": "{}",
+        "sample_params": json.dumps({"city": "chengdu", "format": "j1"}, ensure_ascii=False),
+        "description": "兼容 wttr.in/{city}?format=j1 的天气查询接口",
+        "is_enabled": True,
+    }
+
+    @staticmethod
+    def ensure_builtin_services():
+        with get_connection() as conn:
+            existing = conn.execute(
+                "SELECT id FROM api_services WHERE name = ? LIMIT 1",
+                (ApiServiceRepository.BUILTIN_WEATHER_SERVICE["name"],),
+            ).fetchone()
+            if existing:
+                return
+        ApiServiceRepository.create_service(**ApiServiceRepository.BUILTIN_WEATHER_SERVICE)
+
     @staticmethod
     def create_service(
         name,
@@ -76,6 +99,20 @@ class ApiServiceRepository:
                 WHERE id = ?
                 """,
                 (service_id,),
+            ).fetchone()
+
+    @staticmethod
+    def get_enabled_service_by_category(category):
+        with get_connection() as conn:
+            return conn.execute(
+                """
+                SELECT id, name, category, base_url, method, headers_json, sample_params, description, is_enabled, created_at
+                FROM api_services
+                WHERE category = ? AND is_enabled = 1
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (category,),
             ).fetchone()
 
     @staticmethod

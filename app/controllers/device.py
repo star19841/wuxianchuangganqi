@@ -1,5 +1,6 @@
 """Device management handlers."""
 
+from datetime import datetime, timedelta
 import math
 from urllib.parse import quote
 
@@ -11,6 +12,18 @@ from app.models.device import DeviceRepository
 
 
 DEVICE_PAGE_SIZE = 6
+CHINA_TIME_OFFSET = timedelta(hours=8)
+
+
+def _format_device_timestamp(timestamp):
+    text = (timestamp or "").strip()
+    if not text:
+        return ""
+    try:
+        utc_time = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return text
+    return (utc_time + CHINA_TIME_OFFSET).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _build_sensor_rows(sensor_names, pin_codes, pin_remarks):
@@ -39,6 +52,9 @@ class DeviceListHandler(BaseHandler):
         edit_id = int(self.get_argument("edit_id", "0") or "0")
 
         devices, total = DeviceRepository.list_devices(page=page, page_size=DEVICE_PAGE_SIZE, keyword=keyword)
+        devices = [dict(row) for row in devices]
+        for row in devices:
+            row["last_seen_at"] = _format_device_timestamp(row.get("last_seen_at", ""))
         editing = DeviceRepository.get_device_detail(edit_id) if edit_id else None
         total_pages = max(math.ceil(total / DEVICE_PAGE_SIZE), 1)
 
@@ -68,6 +84,7 @@ class DeviceSaveHandler(BaseHandler):
             "manage_url": (self.get_body_argument("manage_url", "") or "").strip(),
             "device_name": (self.get_body_argument("device_name", "") or "").strip(),
             "category": (self.get_body_argument("category", "") or "").strip(),
+            "remark": (self.get_body_argument("remark", "") or "").strip(),
         }
         sensors = _build_sensor_rows(
             self.get_body_arguments("sensor_name"),
@@ -90,6 +107,7 @@ class DeviceSaveHandler(BaseHandler):
                 device_name=form_data["device_name"],
                 category=form_data["category"],
                 sensors=sensors,
+                remark=form_data["remark"],
             )
             if not updated:
                 self.redirect(f"/devices?edit_id={device_id}&error={quote('设备唯一编码已存在')}")
@@ -112,6 +130,7 @@ class DeviceSaveHandler(BaseHandler):
             device_name=form_data["device_name"],
             category=form_data["category"],
             sensors=sensors,
+            remark=form_data["remark"],
         )
         if not created:
             self.redirect(f"/devices?error={quote('设备唯一编码已存在')}")

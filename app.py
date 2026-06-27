@@ -29,6 +29,7 @@ from app.controllers.api_service import (
     ApiServiceListHandler,
     ApiServiceSaveHandler,
     ApiServiceTestHandler,
+    ApiServiceWeatherHandler,
 )
 from app.controllers.data_report import DataReportListHandler, DataReportRuntimeHandler
 from app.controllers.device import DeviceDeleteHandler, DeviceListHandler, DeviceSaveHandler
@@ -37,6 +38,7 @@ from app.controllers.model_engine import (
     ModelEngineChatHandler,
     ModelEngineDeleteHandler,
     ModelEngineListHandler,
+    MobileChatHandler,
     ModelEngineSaveHandler,
     ModelEngineSetDefaultHandler,
     ModelEngineTestHandler,
@@ -87,8 +89,11 @@ def make_app(debug=True):
             (r"/api-services/save", ApiServiceSaveHandler),
             (r"/api-services/delete", ApiServiceDeleteHandler),
             (r"/api-services/test", ApiServiceTestHandler),
+            (r"/api-services/weather", ApiServiceWeatherHandler),
+            (r"/mobile/weather", ApiServiceWeatherHandler),
             (r"/data-reports", DataReportListHandler),
             (r"/data-reports/runtime", DataReportRuntimeHandler),
+            (r"/mobile/chat", MobileChatHandler),
             (r"/dist/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(base_dir, "dist")}),
         ],
         **settings,

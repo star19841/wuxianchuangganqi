@@ -91,7 +91,8 @@ def _build_aiot_chat_system_prompt(online_devices):
         "- command_text: 当需要控制设备时，填写要直接发给开发板的原始命令；否则返回空字符串。\n"
         "- 如果用户是在查询状态、解释信息、或当前没有合适在线设备，就不要发命令。\n"
         "- 如果用户要求控制 LED/屏幕/传感器，请优先从在线设备及其传感器中选择最匹配的一项。\n"
-        "- 当用户是开灯时，command_text 返回 on；关灯时返回 off；查看状态时返回 status。\n"
+        "- 当用户要开灯时，command_text 优先返回 led_on；关灯时返回 led_off；查看完整状态时返回 get_status；查看传感器时返回 get_sensor。\n"
+        "- 其他直接支持的开发板命令包括 beep_on、beep_off、mode_auto、mode_manual、screen_on、screen_off、report_on、report_off、help。\n"
         "- reply 要自然简洁，若将发送命令，要明确告诉用户你准备控制哪个设备。\n"
         "当前在线设备如下：\n"
         f"{device_text}"
@@ -123,6 +124,54 @@ def _parse_aiot_chat_response(content):
         "reply": (payload.get("reply") or "").strip() or text,
         "target_box_id": (payload.get("target_box_id") or "").strip(),
         "command_text": (payload.get("command_text") or "").strip(),
+    }
+
+
+def _run_model_chat(model, message, online_devices):
+    response = _request_json(
+        f"{model['api_url']}/chat/completions",
+        {
+            "model": model["model_name"],
+            "temperature": model["temperature"],
+            "max_tokens": model["max_tokens"],
+            "messages": [
+                {"role": "system", "content": _build_aiot_chat_system_prompt(online_devices)},
+                {"role": "user", "content": message},
+            ],
+        },
+        {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {model['api_key']}",
+        },
+        timeout=MODEL_CHAT_TIMEOUT,
+    )
+    content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+    parsed = _parse_aiot_chat_response(content)
+
+    command_sent = False
+    target_box_id = parsed["target_box_id"]
+    command_text = parsed["command_text"]
+    if target_box_id and command_text:
+        target_device = next((item for item in online_devices if item["box_id"] == target_box_id), None)
+        if target_device:
+            try:
+                AiotServerManager.instance().send_command(
+                    target_device["server_id"],
+                    target_box_id,
+                    command_text,
+                )
+                command_sent = True
+            except Exception:  # noqa: BLE001
+                command_sent = False
+
+    return {
+        "reply": parsed["reply"],
+        "target_box_id": target_box_id,
+        "command_text": command_text,
+        "command_sent": command_sent,
+        "online_device_count": len(online_devices),
+        "model": model["model_name"],
+        "model_name": model["name"],
     }
 
 
@@ -271,53 +320,47 @@ class ModelEngineChatHandler(BaseHandler):
 
         online_devices = _list_online_control_devices()
         try:
-            response = _request_json(
-                f"{model['api_url']}/chat/completions",
-                {
-                    "model": model["model_name"],
-                    "temperature": model["temperature"],
-                    "max_tokens": model["max_tokens"],
-                    "messages": [
-                        {"role": "system", "content": _build_aiot_chat_system_prompt(online_devices)},
-                        {"role": "user", "content": message},
-                    ],
-                },
-                {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {model['api_key']}",
-                },
-                timeout=MODEL_CHAT_TIMEOUT,
-            )
-            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            parsed = _parse_aiot_chat_response(content)
+            payload = _run_model_chat(model, message, online_devices)
         except Exception as exc:  # noqa: BLE001
             self.set_status(500)
             self.write({"error": f"模型请求失败：{exc}"})
             return
 
-        command_sent = False
-        target_box_id = parsed["target_box_id"]
-        command_text = parsed["command_text"]
-        if target_box_id and command_text:
-            target_device = next((item for item in online_devices if item["box_id"] == target_box_id), None)
-            if target_device:
-                try:
-                    AiotServerManager.instance().send_command(
-                        target_device["server_id"],
-                        target_box_id,
-                        command_text,
-                    )
-                    command_sent = True
-                except Exception:  # noqa: BLE001
-                    command_sent = False
+        self.set_header("Content-Type", "application/json; charset=utf-8")
+        self.write(payload)
+
+
+class MobileChatHandler(tornado.web.RequestHandler):
+    def check_xsrf_cookie(self):
+        return None
+
+    def post(self):
+        try:
+            payload = json.loads(self.request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.write({"error": "请求体必须是 JSON"})
+            return
+
+        message = (payload.get("message") or "").strip()
+        model_id = int(payload.get("model_id") or 0)
+        model = ModelEngineRepository.get_model_by_id(model_id) if model_id else ModelEngineRepository.get_default_model()
+        if not model:
+            self.set_status(404)
+            self.write({"error": "未找到可用模型"})
+            return
+        if not message:
+            self.set_status(400)
+            self.write({"error": "请输入对话内容"})
+            return
+
+        online_devices = _list_online_control_devices()
+        try:
+            result = _run_model_chat(model, message, online_devices)
+        except Exception as exc:  # noqa: BLE001
+            self.set_status(500)
+            self.write({"error": f"模型请求失败：{exc}"})
+            return
 
         self.set_header("Content-Type", "application/json; charset=utf-8")
-        self.write(
-            {
-                "reply": parsed["reply"],
-                "target_box_id": target_box_id,
-                "command_text": command_text,
-                "command_sent": command_sent,
-                "online_device_count": len(online_devices),
-            }
-        )
+        self.write(result)

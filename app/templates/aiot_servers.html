@@ -79,7 +79,7 @@
                                 <div class="layui-panel device-sensor-panel device-sensor-panel-inline" data-command-panel>
                                     <div class="device-sensor-header">
                                         <strong>在线设备命令发送</strong>
-                                        <span>先选择在线设备，再选择传感器，系统会自动把传感器名称和引脚填入命令框。</span>
+                                        <span>先选择在线设备，再点击命令选择器。从弹层里选中命令后直接发送，后续也方便继续扩展更多命令。</span>
                                     </div>
                                     <form class="layui-form" method="post" action="/aiot-servers/send-command" data-command-form>
                                         {% module xsrf_form_html() %}
@@ -96,23 +96,85 @@
                                                 </select>
                                             </div>
                                             <div class="command-panel-field">
-                                                <select data-sensor-select>
-                                                    <option value="">{% if command_devices and command_devices[0]["sensors"] %}选择传感器{% else %}暂无可选传感器{% end %}</option>
-                                                    {% if command_devices %}
-                                                        {% for sensor in command_devices[0]["sensors"] %}
-                                                        <option value="{{ sensor['sensor_name'] }}|{{ sensor['pin_code'] }}">
-                                                            {{ sensor["sensor_name"] }} / {{ sensor["pin_code"] }}{% if sensor["pin_remark"] %} / {{ sensor["pin_remark"] }}{% end %}
-                                                        </option>
-                                                        {% end %}
-                                                    {% end %}
-                                                </select>
+                                                <input type="hidden" name="command_text" data-command-input>
+                                                <button class="command-picker-trigger" type="button" data-command-picker-open>
+                                                    <span class="command-picker-trigger-text" data-command-picker-label>选择命令</span>
+                                                    <i class="layui-icon layui-icon-down"></i>
+                                                </button>
                                             </div>
                                             <div class="command-panel-actions">
-                                                <input class="layui-input" name="command_text" placeholder="输入命令，例如 on" data-command-input>
+                                                <input class="layui-input" value="" placeholder="点击左侧选择命令，例如 led_on / get_status" readonly data-command-display>
                                                 <button class="layui-btn layui-btn-normal" type="submit">发送</button>
                                             </div>
                                         </div>
                                     </form>
+
+                                    <div class="command-picker-modal is-hidden" data-command-picker-modal>
+                                        <div class="command-picker-backdrop" data-command-picker-close></div>
+                                        <div class="command-picker-dialog">
+                                            <div class="command-picker-header">
+                                                <div>
+                                                    <strong>选择命令</strong>
+                                                    <span>当前只展示常用命令，后续新增命令时这里会继续向下扩展，不会挤满主界面。</span>
+                                                </div>
+                                                <button class="command-picker-close" type="button" data-command-picker-close>&times;</button>
+                                            </div>
+                                            <div class="command-picker-grid">
+                                                <button class="command-preset-card" type="button" data-command-preset="led_on" data-command-label="led_on">
+                                                    <strong>led_on</strong>
+                                                    <span>开灯并切到手动模式</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="led_off" data-command-label="led_off">
+                                                    <strong>led_off</strong>
+                                                    <span>关灯并切到手动模式</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="beep_on" data-command-label="beep_on">
+                                                    <strong>beep_on</strong>
+                                                    <span>打开蜂鸣器</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="beep_off" data-command-label="beep_off">
+                                                    <strong>beep_off</strong>
+                                                    <span>关闭蜂鸣器</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="mode_auto" data-command-label="mode_auto">
+                                                    <strong>mode_auto</strong>
+                                                    <span>切到自动感应模式</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="mode_manual" data-command-label="mode_manual">
+                                                    <strong>mode_manual</strong>
+                                                    <span>切到手动控制模式</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="screen_on" data-command-label="screen_on">
+                                                    <strong>screen_on</strong>
+                                                    <span>点亮 OLED 屏幕</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="screen_off" data-command-label="screen_off">
+                                                    <strong>screen_off</strong>
+                                                    <span>熄灭 OLED 屏幕</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="report_on" data-command-label="report_on">
+                                                    <strong>report_on</strong>
+                                                    <span>开启周期上报</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="report_off" data-command-label="report_off">
+                                                    <strong>report_off</strong>
+                                                    <span>关闭周期上报</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="get_status" data-command-label="get_status">
+                                                    <strong>get_status</strong>
+                                                    <span>查询完整状态</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="get_sensor" data-command-label="get_sensor">
+                                                    <strong>get_sensor</strong>
+                                                    <span>查询传感器数据</span>
+                                                </button>
+                                                <button class="command-preset-card" type="button" data-command-preset="help" data-command-label="help">
+                                                    <strong>help</strong>
+                                                    <span>查看开发板命令帮助</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {% if servers %}
@@ -179,6 +241,41 @@
                                             </div>
                                             <div class="aiot-message-empty {% if row['recent_messages'] %}is-hidden{% end %}" data-message-empty>
                                                 还没有收到设备上报消息，服务启动后这里会显示最近的连接与消息记录。
+                                            </div>
+                                        </div>
+
+                                        <div class="ops-log-panel aiot-log-panel">
+                                            <strong>最近事件</strong>
+                                            <div class="aiot-message-stream {% if not row['recent_events'] %}is-hidden{% end %}" data-recent-events>
+                                                {% for event in row["recent_events"] %}
+                                                <article class="aiot-message-item aiot-event-item">
+                                                    <div class="aiot-message-head">
+                                                        <span class="aiot-message-source">{% if event["box_id"] %}{{ event["box_id"] }}{% else %}SYSTEM{% end %}</span>
+                                                        <time>{{ event["created_at"] }}</time>
+                                                    </div>
+                                                    <p>{{ event["event_type"] }}{% if event["event_summary"] %} / {{ event["event_summary"] }}{% end %}</p>
+                                                </article>
+                                                {% end %}
+                                            </div>
+                                            <div class="aiot-message-empty {% if row['recent_events'] %}is-hidden{% end %}">
+                                                还没有产生运行时事件，设备连接、上报和离线后会在这里留下记录。
+                                            </div>
+                                        </div>
+
+                                        <div class="ops-log-panel aiot-log-panel">
+                                            <strong>最近上报设备</strong>
+                                            <div class="aiot-message-stream {% if not row['recent_reported_devices'] %}is-hidden{% end %}" data-recent-reported-devices>
+                                                {% for device in row["recent_reported_devices"] %}
+                                                <article class="aiot-message-item">
+                                                    <div class="aiot-message-head">
+                                                        <span class="aiot-message-source">{{ device["box_id"] }}</span>
+                                                    </div>
+                                                    <p>{{ device["last_event_type"] }}{% if device["event_summary"] %} / {{ device["event_summary"] }}{% end %}</p>
+                                                </article>
+                                                {% end %}
+                                            </div>
+                                            <div class="aiot-message-empty {% if row['recent_reported_devices'] %}is-hidden{% end %}">
+                                                暂无最近上报设备，待设备主动连接或上报后这里会自动更新。
                                             </div>
                                         </div>
 
