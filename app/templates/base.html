@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/dist/layui-v2.13.7/layui/css/layui.css">
+    <link rel="stylesheet" href="{{ static_url('css/style.css') }}">
+    <script src="/dist/layui-v2.13.7/layui/layui.js"></script>
+    <script src="{{ static_url('js/app.js') }}" defer></script>
+</head>
+<body class="{% block body_class %}app-body{% end %}">
+    {% block body %}{% end %}
+</body>
+</html>

@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="ops-shell">
+    <div class="admin-layout" data-success="{{ success }}" data-error="{{ error }}">
+        {% include "_topbar.html" %}
+
+        <div class="admin-workspace">
+            {% include "_sidebar.html" %}
+
+            <main class="admin-content ops-main page-model-engines">
+                <section class="ops-page-head">
+                    <div class="ops-page-copy">
+                        <span class="section-kicker">模型引擎</span>
+                        <h1>模型引擎管理</h1>
+                        <p>按任务三维护 OpenAI 兼容模型配置、默认模型和对话联通测试能力。</p>
+                    </div>
+                    <div class="dashboard-summary ops-summary">
+                        <div class="summary-box">
+                            <span>模型总数</span>
+                            <strong>{{ total }}</strong>
+                        </div>
+                        <div class="summary-box">
+                            <span>默认模型</span>
+                            <strong>{% if default_model %}{{ default_model["model_name"] }}{% else %}未设置{% end %}</strong>
+                        </div>
+                    </div>
+                </section>
+
+                {% if success %}
+                <div class="layui-bg-cyan ops-status-strip">{{ success }}</div>
+                {% elif error %}
+                <div class="layui-bg-orange ops-status-strip ops-status-strip-error">{{ error }}</div>
+                {% end %}
+
+                <div class="dashboard-grid devices-grid ops-dashboard-grid">
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-table-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>模型卡片列表</strong>
+                                    <span>卡片模式 / 默认切换 / 联通测试</span>
+                                </div>
+                            </div>
+                            <div class="layui-card-body">
+                                <div class="ops-toolbar">
+                                    <div class="layui-panel admin-toolbar">
+                                        <form class="layui-form dashboard-search" method="get" action="/model-engines">
+                                            <div class="layui-row layui-col-space12">
+                                                <div class="layui-col-md8">
+                                                    <input class="layui-input" name="keyword" value="{{ keyword }}" placeholder="按引擎名称、模型名称、接口地址搜索">
+                                                </div>
+                                                <div class="layui-col-md4">
+                                                    <div class="dashboard-search-actions">
+                                                        <button class="layui-btn layui-btn-normal" type="submit">
+                                                            <i class="layui-icon layui-icon-search"></i> 搜索
+                                                        </button>
+                                                        <a class="layui-btn layui-btn-primary" href="/model-engines">重置</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="device-card-grid">
+                                    {% for row in models %}
+                                    <article class="device-card">
+                                        <div class="device-card-top">
+                                            <div>
+                                                <span class="device-card-kicker">OpenAI Compatible</span>
+                                                <h3>{{ row["name"] }}</h3>
+                                            </div>
+                                            {% if row["is_default"] %}
+                                            <span class="layui-badge layui-bg-green">默认</span>
+                                            {% else %}
+                                            <span class="layui-badge layui-bg-blue">候选</span>
+                                            {% end %}
+                                        </div>
+                                        <dl class="device-card-meta">
+                                            <div><dt>模型名称</dt><dd>{{ row["model_name"] }}</dd></div>
+                                            <div><dt>接口地址</dt><dd>{{ row["api_url"] }}</dd></div>
+                                            <div><dt>参数</dt><dd>temperature={{ row["temperature"] }} / max_tokens={{ row["max_tokens"] }}</dd></div>
+                                        </dl>
+                                        <div class="device-card-actions server-actions-wrap">
+                                            <a class="layui-btn layui-btn-sm layui-btn-primary" href="/model-engines?edit_id={{ row['id'] }}&page={{ page }}&keyword={{ keyword }}">编辑</a>
+                                            {% if not row["is_default"] %}
+                                            <form method="post" action="/model-engines/default" class="inline-form" data-confirm="确认切换为默认模型吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="model_id" value="{{ row['id'] }}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-normal" type="submit">设为默认</button>
+                                            </form>
+                                            {% end %}
+                                            <button
+                                                class="layui-btn layui-btn-sm layui-btn-primary"
+                                                type="button"
+                                                data-model-chat-open
+                                                data-model-id="{{ row['id'] }}"
+                                                data-model-name="{{ row['name'] }}"
+                                                data-model-model-name="{{ row['model_name'] }}"
+                                                data-model-api-url="{{ row['api_url'] }}"
+                                                data-model-temperature="{{ row['temperature'] }}"
+                                                data-model-max-tokens="{{ row['max_tokens'] }}"
+                                            >测试</button>
+                                            <form method="post" action="/model-engines/delete" class="inline-form" data-confirm="确认删除该模型配置吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="model_id" value="{{ row['id'] }}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-danger" type="submit">删除</button>
+                                            </form>
+                                        </div>
+                                    </article>
+                                    {% end %}
+                                </div>
+
+                                <div class="dashboard-pagination">
+                                    <span>共 {{ total }} 个模型配置</span>
+                                    <div class="dashboard-pagination-links">
+                                        {% if page > 1 %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/model-engines?page={{ page - 1 }}&keyword={{ keyword }}">上一页</a>
+                                        {% end %}
+                                        {% if page < total_pages %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/model-engines?page={{ page + 1 }}&keyword={{ keyword }}">下一页</a>
+                                        {% end %}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-form-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>{% if editing %}编辑模型{% else %}新增模型{% end %}</strong>
+                                    <span>名称、Key、URL、模型名与参数</span>
+                                </div>
+                            </div>
+                            <div class="layui-card-body">
+                                <form class="layui-form dashboard-form ops-side-form" method="post" action="/model-engines/save">
+                                    {% module xsrf_form_html() %}
+                                    <input type="hidden" name="model_id" value="{% if editing %}{{ editing['id'] }}{% else %}0{% end %}">
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">引擎名称</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="name" value="{% if editing %}{{ editing['name'] }}{% end %}" placeholder="例如：生产主模型">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">API Key</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="api_key" value="{% if editing %}{{ editing['api_key'] }}{% elif default_model %}{{ default_model['api_key'] }}{% end %}" placeholder="请输入 OpenAI 兼容 API Key">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">接口地址</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="api_url" value="{% if editing %}{{ editing['api_url'] }}{% elif default_model %}{{ default_model['api_url'] }}{% end %}" placeholder="例如：https://example.com/api/v1">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">模型名称</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="model_name" value="{% if editing %}{{ editing['model_name'] }}{% elif default_model %}{{ default_model['model_name'] }}{% end %}" placeholder="例如：qwen3.5-flash">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">温度</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="temperature" value="{% if editing %}{{ editing['temperature'] }}{% else %}0.7{% end %}" placeholder="例如：0.7">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">Max Tokens</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="max_tokens" value="{% if editing %}{{ editing['max_tokens'] }}{% else %}2048{% end %}" placeholder="例如：2048">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">默认模型</label>
+                                        <div class="layui-input-block">
+                                            <input type="checkbox" name="is_default" value="1" title="保存后设为默认模型" {% if editing and editing["is_default"] %}checked{% end %}>
+                                        </div>
+                                    </div>
+
+                                    <div class="dashboard-form-actions">
+                                        <button class="layui-btn layui-btn-normal" type="submit">{% if editing %}保存模型{% else %}新增模型{% end %}</button>
+                                        {% if editing %}
+                                        <a class="layui-btn layui-btn-primary" href="/model-engines">取消编辑</a>
+                                        {% end %}
+                                    </div>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+</div>
+</div>
+<script type="application/json" data-online-control-devices>{{ json_encode(online_control_devices) }}</script>
+<div class="model-chat-modal is-hidden" data-model-chat-modal>
+    <div class="model-chat-backdrop" data-model-chat-close></div>
+    <div class="model-chat-dialog">
+        <div class="model-chat-header">
+            <strong>默认通义模型 · 对话式测试</strong>
+            <button class="model-chat-close" type="button" data-model-chat-close>&times;</button>
+        </div>
+        <div class="model-chat-layout">
+            <aside class="model-chat-sidebar">
+                <div class="model-chat-model-badge">AI</div>
+                <h3 data-model-chat-name>模型名称</h3>
+                <p class="model-chat-model-name" data-model-chat-model-name>model-name</p>
+                <dl class="model-chat-meta">
+                    <div>
+                        <dt>温度</dt>
+                        <dd data-model-chat-temperature>-</dd>
+                    </div>
+                    <div>
+                        <dt>MaxToken</dt>
+                        <dd data-model-chat-max-tokens>-</dd>
+                    </div>
+                    <div>
+                        <dt>API</dt>
+                        <dd data-model-chat-api-url>-</dd>
+                    </div>
+                </dl>
+                <div class="model-chat-online-note" data-model-chat-device-summary>
+                    系统会结合当前在线设备和传感器，自动生成可直接下发给开发板的命令。
+                </div>
+            </aside>
+            <section class="model-chat-main">
+                <div class="model-chat-messages" data-model-chat-messages></div>
+                <div class="model-chat-compose">
+                    <textarea
+                        class="layui-textarea"
+                        data-model-chat-input
+                        placeholder="例如：打开 LED / 查看状态 / 关闭屏幕，按 Ctrl + Enter 发送"></textarea>
+                    <div class="model-chat-actions">
+                        <button class="layui-btn layui-btn-primary" type="button" data-model-chat-clear>清空</button>
+                        <button class="layui-btn layui-btn-normal" type="button" data-model-chat-send>发送</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+{% end %}

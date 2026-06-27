@@ -1,0 +1,77 @@
+import importlib.util
+import os
+import shutil
+import tempfile
+import unittest
+import urllib.parse
+from pathlib import Path
+
+from tornado.testing import AsyncHTTPTestCase
+
+from app.models import db
+
+APP_MODULE_PATH = Path(__file__).resolve().parents[1] / "app.py"
+APP_SPEC = importlib.util.spec_from_file_location("agent_app_module_dashboard_layout", APP_MODULE_PATH)
+app_module = importlib.util.module_from_spec(APP_SPEC)
+APP_SPEC.loader.exec_module(app_module)
+
+
+class DashboardLayoutFlowTestCase(AsyncHTTPTestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_db_path = db.DB_PATH
+        db.DB_PATH = os.path.join(self.temp_dir, "test.db")
+        db.init_db()
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        db.DB_PATH = self.original_db_path
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def get_app(self):
+        return app_module.make_app(debug=False)
+
+    def _split_cookies(self, response):
+        cookies = {}
+        for item in response.headers.get_list("Set-Cookie"):
+            name, value = item.split(";", 1)[0].split("=", 1)
+            cookies[name] = value
+        return cookies
+
+    def _login_cookies(self):
+        login_page = self.fetch("/auth/login")
+        cookies = self._split_cookies(login_page)
+        xsrf_value = cookies["_xsrf"]
+        body = urllib.parse.urlencode(
+            {"username": "star", "password": "12345678", "_xsrf": xsrf_value}
+        )
+        response = self.fetch(
+            "/auth/login",
+            method="POST",
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Cookie": f"_xsrf={xsrf_value}",
+            },
+            body=body,
+            follow_redirects=False,
+        )
+        cookies.update(self._split_cookies(response))
+        return cookies
+
+    def test_dashboard_pages_share_the_new_ops_layout(self):
+        cookies = self._login_cookies()
+        cookie_header = {"Cookie": "; ".join(f"{key}={value}" for key, value in cookies.items())}
+
+        for path in ["/", "/devices", "/model-engines", "/api-services", "/aiot-servers"]:
+            response = self.fetch(path, headers=cookie_header)
+            html = response.body.decode("utf-8")
+            self.assertEqual(response.code, 200, path)
+            self.assertIn('class="ops-shell"', html, path)
+            self.assertIn("ops-page-head", html, path)
+            self.assertIn('class="ops-content-card', html, path)
+            self.assertIn('class="ops-toolbar"', html, path)
+
+
+if __name__ == "__main__":
+    unittest.main()

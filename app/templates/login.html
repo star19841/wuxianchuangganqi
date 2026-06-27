@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block body_class %}auth-body{% end %}
+
+{% block body %}
+<div class="auth-shell ops-auth-shell">
+    <div class="auth-card ops-auth-card">
+        <section class="auth-brand-panel ops-auth-brand-panel">
+            <div class="auth-brand-top ops-auth-brand-top">CdutAgentOS</div>
+            <div class="auth-brand-content ops-auth-brand-content">
+                <span class="auth-kicker">后台管理系统</span>
+                <h1>登录控制中心</h1>
+                <p>统一承接 AIOT 设备、TCP 服务端、模型引擎与第三方接口管理。</p>
+                <div class="auth-brand-pills">
+                    <span>Layui 统一组件</span>
+                    <span>MVC 分层稳定</span>
+                    <span>设备在线可视化</span>
+                </div>
+            </div>
+            <div class="ops-auth-grid">
+                <div class="ops-auth-grid-box"></div>
+                <div class="ops-auth-grid-box"></div>
+                <div class="ops-auth-grid-box"></div>
+                <div class="ops-auth-grid-box"></div>
+            </div>
+        </section>
+
+        <section class="auth-form-panel ops-auth-form-panel">
+            <div class="auth-form-wrap">
+                <div class="auth-heading ops-auth-heading">
+                    <h2>管理员登录</h2>
+                    <p>默认管理员账号：`star` / `12345678`</p>
+                </div>
+
+                {% if error %}
+                <div class="layui-panel auth-alert auth-alert-error">
+                    <i class="layui-icon layui-icon-close-fill"></i>
+                    <span>{{ error }}</span>
+                </div>
+                {% end %}
+
+                <form class="layui-form auth-form" method="post" action="/auth/login">
+                    {% module xsrf_form_html() %}
+                    <div class="layui-form-item">
+                        <label class="auth-label">用户名</label>
+                        <div class="layui-input-wrap">
+                            <input class="layui-input auth-input" name="username" autocomplete="username" placeholder="请输入后台用户名">
+                        </div>
+                    </div>
+
+                    <div class="layui-form-item">
+                        <label class="auth-label">密码</label>
+                        <div class="layui-input-wrap auth-password-wrap">
+                            <input class="layui-input auth-input" name="password" type="password" autocomplete="current-password" placeholder="请输入登录密码" data-password-input>
+                            <button class="auth-eye" type="button" data-password-toggle aria-label="切换密码显示">
+                                <i class="layui-icon layui-icon-password"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="auth-actions-row">
+                        <a href="/auth/register">新用户注册</a>
+                        <span class="auth-muted">统一后台入口</span>
+                    </div>
+
+                    <button class="layui-btn layui-btn-fluid auth-submit" type="submit">立即登录</button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+{% end %}

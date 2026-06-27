@@ -1,0 +1,40 @@
+<aside class="admin-sidebar ops-sidebar">
+    <div class="admin-sidebar-head ops-sidebar-head">
+        <span class="admin-sidebar-kicker">系统导航</span>
+        <h2>后台工作台</h2>
+        <p>统一管理用户、AIOT 设备、模型接口与 TCP 服务运行状态。</p>
+    </div>
+
+    <div class="layui-panel admin-menu-panel ops-menu-panel">
+        <div class="admin-menu-title">功能菜单</div>
+        <a class="admin-menu-link {% if active_nav == 'users' %}is-active{% end %}" href="/">
+            <span class="admin-menu-icon"><i class="layui-icon layui-icon-home"></i></span>
+            <span>用户列表</span>
+        </a>
+        <a class="admin-menu-link {% if active_nav == 'devices' %}is-active{% end %}" href="/devices">
+            <span class="admin-menu-icon"><i class="layui-icon layui-icon-component"></i></span>
+            <span>设备管理</span>
+        </a>
+        <a class="admin-menu-link {% if active_nav == 'aiot_servers' %}is-active{% end %}" href="/aiot-servers">
+            <span class="admin-menu-icon"><i class="layui-icon layui-icon-release"></i></span>
+            <span>AIOT服务端</span>
+        </a>
+        <a class="admin-menu-link {% if active_nav == 'model_engines' %}is-active{% end %}" href="/model-engines">
+            <span class="admin-menu-icon"><i class="layui-icon layui-icon-engine"></i></span>
+            <span>模型引擎</span>
+        </a>
+        <a class="admin-menu-link {% if active_nav == 'api_services' %}is-active{% end %}" href="/api-services">
+            <span class="admin-menu-icon"><i class="layui-icon layui-icon-link"></i></span>
+            <span>接口管理</span>
+        </a>
+    </div>
+
+    <div class="layui-panel admin-sidebar-tip ops-sidebar-tip">
+        <div class="admin-menu-title">当前规范</div>
+        <ul>
+            <li>所有界面组件统一使用 Layui 风格体系。</li>
+            <li>列表、卡片、表单按任务类型做差异化排版。</li>
+            <li>危险操作统一使用弹层二次确认。</li>
+        </ul>
+    </div>
+</aside>

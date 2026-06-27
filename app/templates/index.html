@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="ops-shell">
+    <div class="admin-layout" data-success="{{ success }}" data-error="{{ error }}">
+        {% include "_topbar.html" %}
+
+        <div class="admin-workspace">
+            {% include "_sidebar.html" %}
+
+            <main class="admin-content ops-main">
+                <section class="ops-page-head">
+                    <div class="ops-page-copy">
+                        <span class="section-kicker">控制台</span>
+                        <h1>用户管理</h1>
+                        <p>按任务一的要求维护登录账号、注册信息、禁用状态与后台用户生命周期。</p>
+                    </div>
+                    <div class="dashboard-summary ops-summary">
+                        <div class="summary-box">
+                            <span>总用户数</span>
+                            <strong>{{ total }}</strong>
+                        </div>
+                        <div class="summary-box">
+                            <span>分页</span>
+                            <strong>{{ page }}/{{ total_pages }}</strong>
+                        </div>
+                    </div>
+                </section>
+
+                {% if success %}
+                <div class="layui-bg-cyan ops-status-strip">{{ success }}</div>
+                {% elif error %}
+                <div class="layui-bg-orange ops-status-strip ops-status-strip-error">{{ error }}</div>
+                {% end %}
+
+                <div class="dashboard-grid ops-dashboard-grid">
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-table-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>用户列表</strong>
+                                    <span>列表呈现 / 搜索 / 分页 / 启用禁用 / 删除</span>
+                                </div>
+                            </div>
+                            <div class="layui-card-body">
+                                <div class="ops-toolbar">
+                                    <div class="layui-panel admin-toolbar">
+                                        <form class="layui-form dashboard-search" method="get" action="/">
+                                            <div class="layui-row layui-col-space12">
+                                                <div class="layui-col-md8">
+                                                    <input class="layui-input" name="keyword" value="{{ keyword }}" placeholder="按用户名、显示名、手机号搜索">
+                                                </div>
+                                                <div class="layui-col-md4">
+                                                    <div class="dashboard-search-actions">
+                                                        <button class="layui-btn layui-btn-normal" type="submit">
+                                                            <i class="layui-icon layui-icon-search"></i> 搜索
+                                                        </button>
+                                                        <a class="layui-btn layui-btn-primary" href="/">重置</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="layui-border-box layui-table-view dashboard-table-wrap ops-table-wrap">
+                                    <table class="layui-table" lay-skin="line">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>用户名</th>
+                                                <th>显示名</th>
+                                                <th>手机号</th>
+                                                <th>状态</th>
+                                                <th>创建时间</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for user in users %}
+                                            <tr>
+                                                <td>{{ user["id"] }}</td>
+                                                <td>{{ user["username"] }}</td>
+                                                <td>{{ user["display_name"] }}</td>
+                                                <td>{{ user["phone"] }}</td>
+                                                <td>
+                                                    {% if user["is_disabled"] %}
+                                                    <span class="layui-badge layui-bg-gray">已禁用</span>
+                                                    {% else %}
+                                                    <span class="layui-badge layui-bg-green">正常</span>
+                                                    {% end %}
+                                                </td>
+                                                <td>{{ user["created_at"] }}</td>
+                                                <td class="dashboard-actions-cell">
+                                                    <a class="layui-btn layui-btn-xs layui-btn-primary" href="/?page={{ page }}&keyword={{ keyword }}&edit_id={{ user['id'] }}">编辑</a>
+
+                                                    <form method="post" action="/users/toggle" class="inline-form">
+                                                        {% module xsrf_form_html() %}
+                                                        <input type="hidden" name="user_id" value="{{ user['id'] }}">
+                                                        <input type="hidden" name="page" value="{{ page }}">
+                                                        <input type="hidden" name="keyword" value="{{ keyword }}">
+                                                        <input type="hidden" name="disabled" value="{% if user['is_disabled'] %}0{% else %}1{% end %}">
+                                                        <button class="layui-btn layui-btn-xs {% if user['is_disabled'] %}layui-btn-normal{% else %}layui-btn-warm{% end %}" type="submit">
+                                                            {% if user["is_disabled"] %}启用{% else %}禁用{% end %}
+                                                        </button>
+                                                    </form>
+
+                                                    <form method="post" action="/users/delete" class="inline-form" data-confirm="确认删除该用户吗？">
+                                                        {% module xsrf_form_html() %}
+                                                        <input type="hidden" name="user_id" value="{{ user['id'] }}">
+                                                        <input type="hidden" name="page" value="{{ page }}">
+                                                        <input type="hidden" name="keyword" value="{{ keyword }}">
+                                                        <button class="layui-btn layui-btn-xs layui-btn-danger" type="submit">删除</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                            {% end %}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="dashboard-pagination">
+                                    <span>共 {{ total }} 条用户记录</span>
+                                    <div class="dashboard-pagination-links">
+                                        {% if page > 1 %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/?page={{ page - 1 }}&keyword={{ keyword }}">上一页</a>
+                                        {% end %}
+                                        {% if page < total_pages %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/?page={{ page + 1 }}&keyword={{ keyword }}">下一页</a>
+                                        {% end %}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-form-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>{% if editing_user %}编辑用户{% else %}新增用户{% end %}</strong>
+                                    <span>用户名、显示名、手机号、密码</span>
+                                </div>
+                            </div>
+                            <div class="layui-card-body">
+                                <form class="layui-form dashboard-form ops-side-form" method="post" action="/users/save">
+                                    {% module xsrf_form_html() %}
+                                    <input type="hidden" name="user_id" value="{% if editing_user %}{{ editing_user['id'] }}{% else %}0{% end %}">
+                                    <input type="hidden" name="page" value="{{ page }}">
+                                    <input type="hidden" name="keyword" value="{{ keyword }}">
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">用户名</label>
+                                        <div class="layui-input-block">
+                                            {% if editing_user %}
+                                            <input class="layui-input layui-disabled" value="{{ editing_user['username'] }}" readonly>
+                                            {% else %}
+                                            <input class="layui-input" name="username" placeholder="请输入唯一用户名">
+                                            {% end %}
+                                        </div>
+                                    </div>
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">显示名</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="display_name" value="{% if editing_user %}{{ editing_user['display_name'] }}{% end %}" placeholder="请输入显示名">
+                                        </div>
+                                    </div>
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">手机号</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="phone" value="{% if editing_user %}{{ editing_user['phone'] }}{% end %}" placeholder="请输入唯一手机号">
+                                        </div>
+                                    </div>
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">{% if editing_user %}重置密码{% else %}登录密码{% end %}</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="password" type="password" placeholder="{% if editing_user %}留空则保持原密码{% else %}请输入登录密码{% end %}">
+                                        </div>
+                                    </div>
+
+                                    <div class="dashboard-form-actions">
+                                        <button class="layui-btn layui-btn-normal" type="submit">{% if editing_user %}保存修改{% else %}创建用户{% end %}</button>
+                                        {% if editing_user %}
+                                        <a class="layui-btn layui-btn-primary" href="/?page={{ page }}&keyword={{ keyword }}">取消编辑</a>
+                                        {% end %}
+                                    </div>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</div>
+{% end %}

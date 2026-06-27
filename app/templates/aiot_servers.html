@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="ops-shell">
+    <div
+        class="admin-layout"
+        data-success="{{ success }}"
+        data-error="{{ error }}"
+        {% if not editing %}data-aiot-runtime-url="{{ runtime_url }}" data-auto-refresh-seconds="5"{% end %}
+    >
+        {% include "_topbar.html" %}
+
+        <div class="admin-workspace">
+            {% include "_sidebar.html" %}
+
+            <main class="admin-content ops-main">
+                <section class="ops-page-head aiot-hero">
+                    <div class="ops-page-copy aiot-hero-copy">
+                        <span class="section-kicker">AIOT 服务中心</span>
+                        <h1>AIOT 服务器管理</h1>
+                        <p>集中维护 TCPServer 接入服务，监控 ESP32 主动连接、设备 ID 上报和在线运行状态。</p>
+                        <div class="aiot-hero-tags">
+                            <span class="layui-badge-rim">TCP 监听</span>
+                            <span class="layui-badge-rim">设备在线监控</span>
+                            <span class="layui-badge-rim">启停与配置联动</span>
+                        </div>
+                    </div>
+                    <div class="dashboard-summary ops-summary aiot-summary">
+                        <div class="summary-box">
+                            <span>服务总数</span>
+                            <strong>{{ total }}</strong>
+                        </div>
+                        <div class="summary-box">
+                            <span>分页</span>
+                            <strong>{{ page }}/{{ total_pages }}</strong>
+                        </div>
+                    </div>
+                </section>
+
+                {% if success %}
+                <div class="layui-bg-cyan ops-status-strip">{{ success }}</div>
+                {% elif error %}
+                <div class="layui-bg-orange ops-status-strip ops-status-strip-error">{{ error }}</div>
+                {% end %}
+
+                <div class="dashboard-grid devices-grid ops-dashboard-grid">
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-table-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>服务运行面板</strong>
+                                    <span>按卡片查看监听地址、在线设备数、配置状态和设备 ID 回传</span>
+                                </div>
+                                {% if not editing %}
+                                <span class="aiot-refresh-hint">消息区每 5 秒局部刷新</span>
+                                {% end %}
+                            </div>
+                            <div class="layui-card-body">
+                                <div class="ops-toolbar">
+                                    <div class="layui-panel admin-toolbar">
+                                        <form class="layui-form dashboard-search" method="get" action="/aiot-servers">
+                                            <div class="layui-row layui-col-space12">
+                                                <div class="layui-col-md8">
+                                                    <input class="layui-input" name="keyword" value="{{ keyword }}" placeholder="搜索服务名称、监听 IP 或端口">
+                                                </div>
+                                                <div class="layui-col-md4">
+                                                    <div class="dashboard-search-actions">
+                                                        <button class="layui-btn layui-btn-normal" type="submit">
+                                                            <i class="layui-icon layui-icon-search"></i> 搜索
+                                                        </button>
+                                                        <a class="layui-btn layui-btn-primary" href="/aiot-servers">重置</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="layui-panel device-sensor-panel device-sensor-panel-inline" data-command-panel>
+                                    <div class="device-sensor-header">
+                                        <strong>在线设备命令发送</strong>
+                                        <span>先选择在线设备，再选择传感器，系统会自动把传感器名称和引脚填入命令框。</span>
+                                    </div>
+                                    <form class="layui-form" method="post" action="/aiot-servers/send-command" data-command-form>
+                                        {% module xsrf_form_html() %}
+                                        <input type="hidden" name="server_id" value="{% if command_devices %}{{ command_devices[0]['server_id'] }}{% else %}0{% end %}" data-command-server-id>
+                                        <div class="command-panel-row">
+                                            <div class="command-panel-field">
+                                                <select name="box_id" data-online-device-select>
+                                                    <option value="">{% if command_devices %}选择在线设备{% else %}暂无在线设备{% end %}</option>
+                                                    {% for device in command_devices %}
+                                                    <option value="{{ device['box_id'] }}" data-server-id="{{ device['server_id'] }}">
+                                                        {{ device["box_id"] }}{% if device["device_name"] %} / {{ device["device_name"] }}{% end %}
+                                                    </option>
+                                                    {% end %}
+                                                </select>
+                                            </div>
+                                            <div class="command-panel-field">
+                                                <select data-sensor-select>
+                                                    <option value="">{% if command_devices and command_devices[0]["sensors"] %}选择传感器{% else %}暂无可选传感器{% end %}</option>
+                                                    {% if command_devices %}
+                                                        {% for sensor in command_devices[0]["sensors"] %}
+                                                        <option value="{{ sensor['sensor_name'] }}|{{ sensor['pin_code'] }}">
+                                                            {{ sensor["sensor_name"] }} / {{ sensor["pin_code"] }}{% if sensor["pin_remark"] %} / {{ sensor["pin_remark"] }}{% end %}
+                                                        </option>
+                                                        {% end %}
+                                                    {% end %}
+                                                </select>
+                                            </div>
+                                            <div class="command-panel-actions">
+                                                <input class="layui-input" name="command_text" placeholder="输入命令，例如 sensor OLED GPIO21" data-command-input>
+                                                <button class="layui-btn layui-btn-normal" type="submit">发送</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                {% if servers %}
+                                <div class="device-card-grid ops-service-grid aiot-service-grid">
+                                    {% for row in servers %}
+                                    <article class="device-card aiot-server-card ops-service-card {{ 'is-online' if row['is_running'] else '' }}" data-server-card data-server-id="{{ row['id'] }}">
+                                        <div class="device-card-top aiot-card-top">
+                                            <div>
+                                                <span class="device-card-kicker">TCP Server</span>
+                                                <h3>{{ row["server_name"] }}</h3>
+                                                <p class="ops-service-address">{{ row["listen_ip"] }}:{{ row["listen_port"] }}</p>
+                                            </div>
+                                            <div class="device-card-badges aiot-card-badges">
+                                                {% if row["is_running"] %}
+                                                <span class="layui-badge layui-bg-green" data-running-badge>运行中</span>
+                                                {% else %}
+                                                <span class="layui-badge layui-bg-gray" data-running-badge>已停止</span>
+                                                {% end %}
+                                                {% if row["is_enabled"] %}
+                                                <span class="layui-badge-rim aiot-badge-rim" data-enabled-badge>已启用</span>
+                                                {% else %}
+                                                <span class="layui-badge-rim aiot-badge-rim is-muted" data-enabled-badge>已停用</span>
+                                                {% end %}
+                                            </div>
+                                        </div>
+
+                                        <div class="aiot-service-spotlight">
+                                            <div class="aiot-spotlight-main">
+                                                <span>当前监听</span>
+                                                <strong>{{ row["listen_ip"] }}:{{ row["listen_port"] }}</strong>
+                                            </div>
+                                            <div class="aiot-spotlight-dot {{ 'is-online' if row['is_running'] else 'is-offline' }}" data-running-dot></div>
+                                        </div>
+
+                                        <dl class="device-card-meta ops-service-meta aiot-service-meta">
+                                            <div>
+                                                <dt>在线设备数</dt>
+                                                <dd data-online-count>{{ row["online_count"] }}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>配置状态</dt>
+                                                <dd data-config-status>{% if row["is_enabled"] %}启用{% else %}停用{% end %}</dd>
+                                            </div>
+                                        </dl>
+
+                                        <div class="ops-inline-note aiot-device-id-note">
+                                            <span class="aiot-note-label">设备 ID</span>
+                                            <strong data-device-ids>{% if row["online_box_ids"] %}{{ row["online_box_ids"] }}{% else %}暂无在线设备{% end %}</strong>
+                                        </div>
+
+                                        <div class="ops-log-panel aiot-log-panel">
+                                            <strong>SYSTEM</strong>
+                                            <p class="aiot-runtime-summary" data-runtime-summary>{{ row["runtime_summary"] }}</p>
+                                            <div class="aiot-message-stream {% if not row['recent_messages'] %}is-hidden{% end %}" data-message-stream>
+                                                {% for message in row["recent_messages"] %}
+                                                <article class="aiot-message-item">
+                                                    <div class="aiot-message-head">
+                                                        <span class="aiot-message-source">{% if message["box_id"] %}{{ message["box_id"] }}{% else %}SYSTEM{% end %}</span>
+                                                        <time>{{ message["created_at"] }}</time>
+                                                    </div>
+                                                    <p>{{ message["message_text"] }}</p>
+                                                </article>
+                                                {% end %}
+                                            </div>
+                                            <div class="aiot-message-empty {% if row['recent_messages'] %}is-hidden{% end %}" data-message-empty>
+                                                还没有收到设备上报消息，服务启动后这里会显示最近的连接与消息记录。
+                                            </div>
+                                        </div>
+
+                                        <div class="device-card-actions server-actions-wrap aiot-card-actions">
+                                            <a class="layui-btn layui-btn-sm layui-btn-primary" href="/aiot-servers?edit_id={{ row['id'] }}&page={{ page }}&keyword={{ keyword }}">编辑</a>
+                                            {% if row["is_running"] %}
+                                            <form method="post" action="/aiot-servers/stop" class="inline-form" data-confirm="确认停止该 TCP 服务吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="server_id" value="{{ row['id'] }}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-warm" type="submit">停止</button>
+                                            </form>
+                                            {% else %}
+                                            <form method="post" action="/aiot-servers/start" class="inline-form" data-confirm="确认启动该 TCP 服务吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="server_id" value="{{ row['id'] }}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-normal" type="submit">启动</button>
+                                            </form>
+                                            {% end %}
+                                            <form method="post" action="/aiot-servers/toggle" class="inline-form" data-confirm="确认切换该服务启用状态吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="server_id" value="{{ row['id'] }}">
+                                                <input type="hidden" name="is_enabled" value="{% if row['is_enabled'] %}0{% else %}1{% end %}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-primary" type="submit">{% if row["is_enabled"] %}停用{% else %}启用{% end %}</button>
+                                            </form>
+                                            <form method="post" action="/aiot-servers/delete" class="inline-form" data-confirm="确认删除该服务配置吗？">
+                                                {% module xsrf_form_html() %}
+                                                <input type="hidden" name="server_id" value="{{ row['id'] }}">
+                                                <button class="layui-btn layui-btn-sm layui-btn-danger" type="submit">删除</button>
+                                            </form>
+                                        </div>
+                                    </article>
+                                    {% end %}
+                                </div>
+                                {% else %}
+                                <div class="layui-panel aiot-empty-state">
+                                    <div class="aiot-empty-icon">
+                                        <i class="layui-icon layui-icon-release"></i>
+                                    </div>
+                                    <h3>还没有 AIOT 服务</h3>
+                                    <p>先在右侧创建一个 TCP 接入服务，保存后即可开始监听 ESP32 设备连接。</p>
+                                </div>
+                                {% end %}
+
+                                <div class="dashboard-pagination">
+                                    <span>共 {{ total }} 个 AIOT 服务</span>
+                                    <div class="dashboard-pagination-links">
+                                        {% if page > 1 %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/aiot-servers?page={{ page - 1 }}&keyword={{ keyword }}">上一页</a>
+                                        {% end %}
+                                        {% if page < total_pages %}
+                                        <a class="layui-btn layui-btn-sm layui-btn-primary" href="/aiot-servers?page={{ page + 1 }}&keyword={{ keyword }}">下一页</a>
+                                        {% end %}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="ops-content-card">
+                        <section class="layui-card dashboard-card dashboard-form-card aiot-form-card">
+                            <div class="layui-card-header ops-card-header">
+                                <div>
+                                    <strong>{% if editing %}编辑服务{% else %}新增服务{% end %}</strong>
+                                    <span>填写监听信息并决定是否保存后自动启用 TCP 服务</span>
+                                </div>
+                            </div>
+                            <div class="layui-card-body">
+                                <div class="aiot-form-intro">
+                                    <div class="aiot-form-intro-icon">
+                                        <i class="layui-icon layui-icon-set-fill"></i>
+                                    </div>
+                                    <div>
+                                        <strong>服务配置向导</strong>
+                                        <p>推荐先使用 `0.0.0.0` 监听全部网卡，再根据设备侧 `tcpServerIP` 与 `tcpServerPort` 进行接入。</p>
+                                    </div>
+                                </div>
+
+                                <form class="layui-form dashboard-form ops-side-form" method="post" action="/aiot-servers/save">
+                                    {% module xsrf_form_html() %}
+                                    <input type="hidden" name="server_id" value="{% if editing %}{{ editing['id'] }}{% else %}0{% end %}">
+
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">服务名称</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="server_name" value="{% if editing %}{{ editing['server_name'] }}{% end %}" placeholder="例如：ESP32 接入主服务">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">监听 IP</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="listen_ip" value="{% if editing %}{{ editing['listen_ip'] }}{% else %}0.0.0.0{% end %}" placeholder="例如：0.0.0.0">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">监听端口</label>
+                                        <div class="layui-input-block">
+                                            <input class="layui-input" name="listen_port" value="{% if editing %}{{ editing['listen_port'] }}{% else %}8888{% end %}" placeholder="例如：8888">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">启用服务</label>
+                                        <div class="layui-input-block">
+                                            <input type="checkbox" name="is_enabled" value="1" title="保存后自动启用并启动 TCP 服务" {% if not editing or editing["is_enabled"] %}checked{% end %}>
+                                        </div>
+                                    </div>
+
+                                    <div class="dashboard-form-actions">
+                                        <button class="layui-btn layui-btn-normal" type="submit">{% if editing %}保存服务{% else %}新增服务{% end %}</button>
+                                        {% if editing %}
+                                        <a class="layui-btn layui-btn-primary" href="/aiot-servers">取消编辑</a>
+                                        {% end %}
+                                    </div>
+                                </form>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</div>
+{% end %}

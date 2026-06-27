@@ -1,0 +1,43 @@
+<header class="admin-topbar ops-topbar">
+    <div class="admin-topbar-brand ops-topbar-brand">
+        <span class="admin-brand-badge">C</span>
+        <div>
+            <strong>CdutAgentOS</strong>
+            <p>后台管理系统</p>
+        </div>
+    </div>
+
+    <div class="admin-topbar-meta ops-topbar-meta">
+        <div class="layui-breadcrumb admin-breadcrumb ops-breadcrumb" lay-separator="/">
+            <a href="/">控制台</a>
+            <a>
+                <cite>
+                    {% if active_nav == 'devices' %}
+                        AIOT设备
+                    {% elif active_nav == 'model_engines' %}
+                        模型引擎
+                    {% elif active_nav == 'api_services' %}
+                        接口管理
+                    {% elif active_nav == 'aiot_servers' %}
+                        AIOT服务端
+                    {% else %}
+                        用户管理
+                    {% end %}
+                </cite>
+            </a>
+        </div>
+        <div class="admin-topbar-user ops-topbar-user">
+            <div class="admin-user-chip">
+                <span class="admin-user-avatar">{{ username[0].upper() if username else 'U' }}</span>
+                <div>
+                    <strong>{{ username }}</strong>
+                    <p>管理员在线</p>
+                </div>
+            </div>
+            <form method="post" action="/auth/logout">
+                {% module xsrf_form_html() %}
+                <button class="layui-btn layui-btn-primary layui-border-blue" type="submit">退出登录</button>
+            </form>
+        </div>
+    </div>
+</header>
